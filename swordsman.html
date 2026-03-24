@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>剑客 · Pixel Art</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: linear-gradient(180deg, #070b1a 0%, #0d1025 40%, #131832 70%, #0a0e20 100%);
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* ========== Moon ========== */
+  .moon {
+    position: absolute;
+    top: 8vh;
+    right: 15vw;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #fffde7, #fce4a8 60%, #e8c96880);
+    box-shadow:
+      0 0 40px 10px rgba(255, 248, 200, 0.15),
+      0 0 100px 30px rgba(255, 248, 200, 0.08),
+      0 0 200px 60px rgba(255, 248, 200, 0.04);
+    animation: moonGlow 6s ease-in-out infinite;
+  }
+
+  @keyframes moonGlow {
+    0%, 100% { box-shadow: 0 0 40px 10px rgba(255,248,200,0.15), 0 0 100px 30px rgba(255,248,200,0.08), 0 0 200px 60px rgba(255,248,200,0.04); }
+    50% { box-shadow: 0 0 50px 15px rgba(255,248,200,0.2), 0 0 120px 40px rgba(255,248,200,0.1), 0 0 220px 70px rgba(255,248,200,0.06); }
+  }
+
+  /* ========== Stars ========== */
+  .star {
+    position: absolute;
+    background: #fff;
+    border-radius: 50%;
+    animation: twinkle var(--dur) ease-in-out infinite;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: var(--base-op); }
+    50% { opacity: 0.1; }
+  }
+
+  /* ========== Ground / Cliff ========== */
+  .ground {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 18vh;
+    background: linear-gradient(180deg, transparent 0%, #06080f 30%, #040609 100%);
+  }
+
+  .cliff {
+    position: absolute;
+    bottom: 12vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 240px;
+    height: 12px;
+    background: linear-gradient(180deg, #1a1e30, #0a0c15);
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  }
+
+  /* ========== Character Container ========== */
+  .character-wrap {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 2vh;
+  }
+
+  /* Character shadow on ground */
+  .char-shadow {
+    width: 80px;
+    height: 10px;
+    background: radial-gradient(ellipse, rgba(0,0,0,0.5) 0%, transparent 70%);
+    margin-top: -4px;
+    animation: shadowPulse 4s ease-in-out infinite;
+  }
+
+  @keyframes shadowPulse {
+    0%, 100% { transform: scaleX(1); opacity: 0.5; }
+    50% { transform: scaleX(1.05); opacity: 0.6; }
+  }
+
+  /* ========== Pixel Grid ========== */
+  .pixel-grid {
+    display: grid;
+    gap: 0;
+    image-rendering: pixelated;
+    animation: breathe 4s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+
+  .pixel-grid .px {
+    transition: background-color 0.3s;
+  }
+
+  /* Fade-in wave for each pixel */
+  .px {
+    opacity: 0;
+    animation: pixelIn 0.5s ease forwards;
+  }
+
+  @keyframes pixelIn {
+    to { opacity: 1; }
+  }
+
+  /* Sword gleam */
+  .gleam {
+    animation: swordGleam 0.6s ease-out;
+  }
+
+  @keyframes swordGleam {
+    0% { filter: brightness(1); }
+    30% { filter: brightness(3); }
+    100% { filter: brightness(1); }
+  }
+
+  /* ========== Petals ========== */
+  .petal {
+    position: absolute;
+    width: var(--size);
+    height: var(--size);
+    background: var(--color);
+    border-radius: 50% 0 50% 0;
+    opacity: 0;
+    pointer-events: none;
+    animation: petalFall var(--fall-dur) linear infinite;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes petalFall {
+    0% {
+      opacity: 0;
+      transform: translate(0, -20px) rotate(0deg) scale(0.8);
+    }
+    10% { opacity: 0.8; }
+    90% { opacity: 0.6; }
+    100% {
+      opacity: 0;
+      transform: translate(var(--drift), calc(100vh + 20px)) rotate(var(--spin)) scale(0.4);
+    }
+  }
+
+  /* ========== Title ========== */
+  .title-area {
+    position: absolute;
+    bottom: 4vh;
+    text-align: center;
+    z-index: 20;
+  }
+
+  .title-cn {
+    font-size: 28px;
+    letter-spacing: 16px;
+    color: #c8c0b0;
+    text-shadow: 0 0 20px rgba(200, 192, 176, 0.3);
+    margin-bottom: 6px;
+  }
+
+  .title-en {
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: #555;
+    text-transform: uppercase;
+  }
+
+  /* ========== Moonlight ray ========== */
+  .moonray {
+    position: absolute;
+    top: 0;
+    right: 10vw;
+    width: 300px;
+    height: 100vh;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 250, 220, 0.02) 0%,
+      rgba(255, 250, 220, 0.01) 50%,
+      transparent 100%
+    );
+    transform: skewX(-15deg);
+    pointer-events: none;
+  }
+
+  /* ========== Mist ========== */
+  .mist {
+    position: absolute;
+    bottom: 14vh;
+    width: 120%;
+    height: 60px;
+    left: -10%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(150, 160, 180, 0.04) 20%,
+      rgba(150, 160, 180, 0.06) 50%,
+      rgba(150, 160, 180, 0.04) 80%,
+      transparent 100%
+    );
+    animation: mistDrift 20s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes mistDrift {
+    0% { transform: translateX(-10%); }
+    100% { transform: translateX(10%); }
+  }
+
+  /* ========== Back link ========== */
+  .back-link {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: #444;
+    text-decoration: none;
+    font-size: 13px;
+    letter-spacing: 1px;
+    z-index: 30;
+    transition: color 0.3s;
+  }
+  .back-link:hover { color: #888; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; Gallery</a>
+
+<!-- Scene elements -->
+<div class="moon"></div>
+<div class="moonray"></div>
+<div class="mist"></div>
+<div class="ground"></div>
+<div class="cliff"></div>
+
+<!-- Character -->
+<div class="character-wrap">
+  <div id="character" class="pixel-grid"></div>
+  <div class="char-shadow"></div>
+</div>
+
+<!-- Title -->
+<div class="title-area">
+  <div class="title-cn">剑 客</div>
+  <div class="title-en">swordsman</div>
+</div>
+
+<!-- Petals container -->
+<div id="petals"></div>
+
+<script>
+// ============================================
+// 中国古代剑客 · Pixel Art Data
+// 16 x 24 grid
+// ============================================
+const SWORDSMAN = {
+  width: 16,
+  height: 24,
+  palette: {
+    '.': 'transparent',
+    'G': '#d4af37',   // gold hairpin
+    'H': '#0f0f1a',   // darkest hair
+    'h': '#1a1a2e',   // dark hair
+    'i': '#2a2a45',   // hair highlight
+    'S': '#f5d0a0',   // skin
+    's': '#ddb080',   // skin shadow
+    'D': '#151520',   // dark detail (brows, shoes)
+    'E': '#0a0a0a',   // eyes
+    'M': '#c96b5e',   // mouth
+    'B': '#1a3050',   // dark blue robe
+    'b': '#2a5a8a',   // light blue robe
+    'w': '#dce0e8',   // white inner robe
+    'v': '#b8bcc8',   // white shadow
+    'R': '#8b2020',   // dark red belt
+    'r': '#c83030',   // red belt bright
+    'T': '#e04050',   // red tassel
+    'A': '#c8ccd4',   // sword blade
+    'a': '#9ca0a8',   // sword blade shadow
+    'K': '#b89830',   // sword guard gold
+  },
+  pixels: [
+    // 0123456789012345
+    '.......GG.......',  //  0 — 金簪尖
+    '......GhhG......',  //  1 — 簪身
+    '.....hhhhhh.....',  //  2 — 发髻
+    '.....hhiihh.....',  //  3 — 发髻光泽
+    '....hhhhhhhh....',  //  4 — 头发展开
+    '....hhSSSSSh....',  //  5 — 额头
+    '....hSDSSDSh....',  //  6 — 眉毛
+    '....hSESSEShh...',  //  7 — 眼睛 + 飘发
+    '....hSSSsSShh...',  //  8 — 面颊鼻影 + 飘发
+    '.....SSMMSS.hh..',  //  9 — 嘴 + 飘发
+    '......SSSS...h..',  // 10 — 下巴 + 飘发
+    '......SwwS......',  // 11 — 脖子 + 领口
+    '.....bwwwwb.....',  // 12 — 衣领
+    '....bBwwwwBb....',  // 13 — 上衣
+    '...bBBwwwwBBb...',  // 14 — 上衣展开
+    '..SBBBwwwwBBBS..',  // 15 — 宽袖 + 手
+    '..SBBrrrrrBBSKA.',  // 16 — 红腰带 + 剑
+    '...BBBBBBBBB.aA.',  // 17 — 下袍 + 剑
+    '...BBBbBBBBB.aA.',  // 18 — 下袍褶 + 剑
+    '...BBBbBBBB..aA.',  // 19 — 下袍褶 + 剑
+    '...BBB..BBB..aT.',  // 20 — 袍叉 + 剑穗
+    '...BBB..BBB.....',  // 21 — 袍底
+    '....SS..SS......',  // 22 — 脚踝
+    '...DDD..DDD.....',  // 23 — 靴
+  ]
+};
+
+// ============================================
+// Render pixel character
+// ============================================
+const SCALE = 8;
+const grid = document.getElementById('character');
+grid.style.gridTemplateColumns = `repeat(${SWORDSMAN.width}, ${SCALE}px)`;
+
+const pixelElements = [];
+
+SWORDSMAN.pixels.forEach((row, y) => {
+  for (let x = 0; x < SWORDSMAN.width; x++) {
+    const ch = row[x] || '.';
+    const color = SWORDSMAN.palette[ch] || 'transparent';
+    const px = document.createElement('div');
+    px.className = 'px';
+    px.style.width = SCALE + 'px';
+    px.style.height = SCALE + 'px';
+    px.style.background = color;
+
+    // Staggered fade-in: wave from top-left to bottom-right
+    const delay = (x * 0.02 + y * 0.04);
+    px.style.animationDelay = delay + 's';
+
+    px.dataset.char = ch;
+    px.dataset.x = x;
+    px.dataset.y = y;
+
+    grid.appendChild(px);
+    pixelElements.push({ el: px, ch, x, y, baseColor: color });
+  }
+});
+
+// ============================================
+// Sword gleam animation
+// ============================================
+function swordGleam() {
+  const swordPixels = pixelElements.filter(p =>
+    (p.ch === 'A' || p.ch === 'a' || p.ch === 'K') && p.baseColor !== 'transparent'
+  );
+
+  // Sort by y position (top to bottom)
+  swordPixels.sort((a, b) => a.y - b.y);
+
+  swordPixels.forEach((p, i) => {
+    setTimeout(() => {
+      p.el.style.background = '#ffffff';
+      p.el.style.boxShadow = '0 0 6px 2px rgba(255,255,255,0.6)';
+      setTimeout(() => {
+        p.el.style.background = p.baseColor;
+        p.el.style.boxShadow = 'none';
+      }, 200);
+    }, i * 80);
+  });
+}
+
+// Gleam every 5 seconds after initial load
+setTimeout(() => {
+  swordGleam();
+  setInterval(swordGleam, 5000);
+}, 2000);
+
+// ============================================
+// Generate stars
+// ============================================
+function createStars() {
+  const count = 80;
+  for (let i = 0; i < count; i++) {
+    const star = document.createElement('div');
+    star.className = 'star';
+    const size = Math.random() < 0.1 ? 2 : 1;
+    star.style.width = size + 'px';
+    star.style.height = size + 'px';
+    star.style.left = Math.random() * 100 + 'vw';
+    star.style.top = Math.random() * 55 + 'vh';
+    star.style.setProperty('--dur', (3 + Math.random() * 4) + 's');
+    star.style.setProperty('--delay', (Math.random() * 5) + 's');
+    star.style.setProperty('--base-op', (0.3 + Math.random() * 0.7));
+    document.body.appendChild(star);
+  }
+}
+createStars();
+
+// ============================================
+// Cherry blossom petals
+// ============================================
+function createPetals() {
+  const container = document.getElementById('petals');
+  const colors = ['#ffb7c5', '#ffc0cb', '#ffa0b0', '#ff8fa0', '#e8a0b0'];
+  const count = 20;
+
+  for (let i = 0; i < count; i++) {
+    const petal = document.createElement('div');
+    petal.className = 'petal';
+    const size = 4 + Math.random() * 6;
+    petal.style.setProperty('--size', size + 'px');
+    petal.style.setProperty('--color', colors[Math.floor(Math.random() * colors.length)]);
+    petal.style.setProperty('--fall-dur', (8 + Math.random() * 12) + 's');
+    petal.style.setProperty('--delay', (Math.random() * 15) + 's');
+    petal.style.setProperty('--drift', (Math.random() * 200 - 100) + 'px');
+    petal.style.setProperty('--spin', (Math.random() * 720 - 360) + 'deg');
+    petal.style.left = (Math.random() * 100) + 'vw';
+    petal.style.top = '-20px';
+    container.appendChild(petal);
+  }
+}
+createPetals();
+
+// ============================================
+// Wind effect on flowing hair (subtle color shift)
+// ============================================
+const hairPixels = pixelElements.filter(p =>
+  (p.ch === 'h' || p.ch === 'i') && p.y >= 7 && p.y <= 10
+);
+
+function windEffect() {
+  const time = Date.now() / 1000;
+  hairPixels.forEach(p => {
+    const wave = Math.sin(time * 2 + p.x * 0.5 + p.y * 0.3);
+    const brightness = 1 + wave * 0.15;
+    p.el.style.filter = `brightness(${brightness})`;
+  });
+  requestAnimationFrame(windEffect);
+}
+setTimeout(windEffect, 1500);
+</script>
+</body>
+</html>

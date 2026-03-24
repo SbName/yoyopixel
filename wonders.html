@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelAI — World Wonders</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 100vw; height: 100vh; overflow: hidden;
+    background: #06060c;
+    font-family: 'Courier New', monospace;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas {
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    border: 1px solid #1a1a2e; border-radius: 4px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  }
+  .controls {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; gap: 6px; padding: 10px 14px;
+    background: rgba(6,6,12,0.94); backdrop-filter: blur(8px);
+    border-bottom: 1px solid #1a1a2e; z-index: 100;
+    flex-wrap: wrap; align-items: center;
+  }
+  .ctrl-group { display: flex; gap: 4px; align-items: center; }
+  .ctrl-group .lbl {
+    font-size: 10px; color: #555; letter-spacing: 1px;
+    margin-right: 4px; text-transform: uppercase;
+  }
+  .controls button {
+    background: #10142a; border: 1px solid #1e2240; color: #777;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    padding: 4px 10px; border-radius: 3px; cursor: pointer;
+    transition: all 0.15s; letter-spacing: 0.5px;
+  }
+  .controls button:hover { border-color: #d4af37; color: #d4af37; }
+  .controls button.active { background: #d4af37; border-color: #d4af37; color: #1a1a2e; font-weight: bold; }
+  .sep { width: 1px; height: 20px; background: #1e2240; margin: 0 4px; }
+  .btn-regen {
+    background: #1a3020 !important; border-color: #2a6040 !important; color: #4ade80 !important;
+  }
+  .btn-regen:hover { background: #2a6040 !important; color: #fff !important; }
+  .info {
+    position: fixed; bottom: 12px; left: 16px;
+    font-size: 10px; color: #333; letter-spacing: 1px; z-index: 100;
+  }
+  .wonder-name {
+    position: fixed; bottom: 12px; right: 16px;
+    font-size: 11px; color: #d4af37; letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(212,175,55,0.3);
+    z-index: 100; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <span class="lbl">Wonder</span>
+    <button class="scene-btn active" data-scene="pyramids">Pyramids</button>
+    <button class="scene-btn" data-scene="great-wall">Great Wall</button>
+    <button class="scene-btn" data-scene="forbidden-city">Forbidden City</button>
+    <button class="scene-btn" data-scene="taj-mahal">Taj Mahal</button>
+    <button class="scene-btn" data-scene="eiffel">Eiffel Tower</button>
+    <button class="scene-btn" data-scene="colosseum">Colosseum</button>
+    <button class="scene-btn" data-scene="angkor-wat">Angkor Wat</button>
+    <button class="scene-btn" data-scene="stonehenge">Stonehenge</button>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <span class="lbl">Size</span>
+    <button class="size-btn" data-w="128" data-h="96">128×96</button>
+    <button class="size-btn active" data-w="192" data-h="128">192×128</button>
+    <button class="size-btn" data-w="256" data-h="144">HD</button>
+    <button class="size-btn" data-w="130" data-h="230">Phone</button>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <span class="lbl">Scale</span>
+    <button class="scale-btn" data-s="2">2x</button>
+    <button class="scale-btn" data-s="3">3x</button>
+    <button class="scale-btn active" data-s="4">4x</button>
+  </div>
+  <div class="sep"></div>
+  <button class="btn-regen" id="btn-regen">Regenerate</button>
+</div>
+
+<canvas id="canvas"></canvas>
+<div class="info" id="info"></div>
+<div class="wonder-name" id="wonder-name">Pyramids of Giza</div>
+
+<script>
+// ================================================================
+//  World Wonders — Procedural Pixel Art
+// ================================================================
+
+// ======== MATH ========
+function lerp(a,b,t){return a+(b-a)*t}
+function clamp(v,lo,hi){return v<lo?lo:v>hi?hi:v}
+function smoothstep(t){return t*t*(3-2*t)}
+let SEED=Math.random()*99999|0;
+function hash2D(x,y){let n=(x+SEED)*374761393+y*668265263;n=((n^(n>>13))*1274126177)|0;return((n^(n>>16))>>>0)/4294967296}
+function valueNoise(x,y){const ix=Math.floor(x),iy=Math.floor(y),fx=smoothstep(x-ix),fy=smoothstep(y-iy);return lerp(lerp(hash2D(ix,iy),hash2D(ix+1,iy),fx),lerp(hash2D(ix,iy+1),hash2D(ix+1,iy+1),fx),fy)}
+function fbm(x,y,oct=5){let v=0,a=1,f=1,t=0;for(let i=0;i<oct;i++){v+=valueNoise(x*f,y*f)*a;t+=a;a*=0.5;f*=2}return v/t}
+function ridgeNoise(x,y,oct=4){let v=0,a=1,f=1,t=0;for(let i=0;i<oct;i++){let n=valueNoise(x*f,y*f);n=1-Math.abs(n*2-1);v+=n*a;t+=a;a*=0.5;f*=2.1}return v/t}
+
+const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+function dither(x,y,r){return r>BAYER[y&3][x&3]/16}
+function hex(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]}
+function ditherC(x,y,c1,c2,r){return dither(x,y,clamp(r,0,1))?c2:c1}
+function lerpC(a,b,t){return[Math.round(lerp(a[0],b[0],t)),Math.round(lerp(a[1],b[1],t)),Math.round(lerp(a[2],b[2],t))]}
+
+// ======== PIXEL BUFFER ========
+class PB{
+  constructor(w,h){this.w=w;this.h=h;this.buf=new Uint8ClampedArray(w*h*4)}
+  clear(){this.buf.fill(0)}
+  set(x,y,r,g,b,a){if(x<0||x>=this.w||y<0||y>=this.h)return;const i=(y*this.w+x)<<2;this.buf[i]=r;this.buf[i|1]=g;this.buf[i|2]=b;this.buf[i|3]=a||255}
+  setC(x,y,c){this.set(x,y,c[0],c[1],c[2])}
+  get(x,y){if(x<0||x>=this.w||y<0||y>=this.h)return[0,0,0,0];const i=(y*this.w+x)<<2;return[this.buf[i],this.buf[i|1],this.buf[i|2],this.buf[i|3]]}
+  blend(x,y,c,a){if(x<0||x>=this.w||y<0||y>=this.h)return;const bg=this.get(x,y),t=a/255;this.set(x,y,Math.round(bg[0]*(1-t)+c[0]*t),Math.round(bg[1]*(1-t)+c[1]*t),Math.round(bg[2]*(1-t)+c[2]*t))}
+  // Filled triangle
+  tri(x1,y1,x2,y2,x3,y3,c){
+    const minY=Math.max(0,Math.min(y1,y2,y3)|0),maxY=Math.min(this.h-1,Math.max(y1,y2,y3)|0);
+    for(let y=minY;y<=maxY;y++){
+      let xs=[];
+      [[x1,y1,x2,y2],[x2,y2,x3,y3],[x3,y3,x1,y1]].forEach(([ax,ay,bx,by])=>{
+        if((ay<=y&&by>y)||(by<=y&&ay>y)){const t=(y-ay)/(by-ay);xs.push(Math.round(ax+t*(bx-ax)))}
+      });
+      if(xs.length>=2){xs.sort((a,b)=>a-b);for(let x=xs[0];x<=xs[xs.length-1];x++)this.setC(x,y,c)}
+    }
+  }
+  rect(x,y,w,h,c){for(let dy=0;dy<h;dy++)for(let dx=0;dx<w;dx++)this.setC(x+dx,y+dy,c)}
+  line(x1,y1,x2,y2,c){
+    const dx=Math.abs(x2-x1),dy=Math.abs(y2-y1),sx=x1<x2?1:-1,sy=y1<y2?1:-1;
+    let err=dx-dy;
+    while(true){this.setC(x1,y1,c);if(x1===x2&&y1===y2)break;const e2=2*err;if(e2>-dy){err-=dy;x1+=sx}if(e2<dx){err+=dx;y1+=sy}}
+  }
+}
+
+// ======== SHARED DRAWING ========
+function drawSky(pb,colors){
+  const w=pb.w,h=pb.h,n=colors.length;
+  for(let y=0;y<h;y++){
+    const t=y/(h*0.65),seg=clamp(t,0,0.999)*(n-1),idx=Math.floor(seg),frac=seg-idx;
+    const c1=colors[Math.min(idx,n-1)],c2=colors[Math.min(idx+1,n-1)];
+    for(let x=0;x<w;x++)pb.setC(x,y,ditherC(x,y,c1,c2,frac));
+  }
+}
+function drawStars(pb,count){
+  for(let i=0;i<count;i++){
+    const x=Math.floor(hash2D(i*7,i*13+999)*pb.w),y=Math.floor(hash2D(i*11+333,i*3)*pb.h*0.5);
+    const b=0.3+hash2D(i+500,i)*0.7;pb.blend(x,y,[255,255,240],Math.round(b*255));
+    if(hash2D(i+1e3,i)>0.93){pb.blend(x+1,y,[255,255,240],Math.round(b*100));pb.blend(x-1,y,[255,255,240],Math.round(b*100))}
+  }
+}
+function drawSun(pb,cx,cy,r,c,g){
+  for(let dy=-r*3;dy<=r*3;dy++)for(let dx=-r*3;dx<=r*3;dx++){
+    const d=Math.sqrt(dx*dx+dy*dy),px=cx+dx,py=cy+dy;
+    if(d<=r)pb.setC(px,py,ditherC(px,py,c,g,d/r*0.3));
+    else if(d<r*3){const t=(d-r)/(r*2);if(!dither(px,py,1-t))pb.blend(px,py,g,Math.round((1-t)*40))}
+  }
+}
+function drawMountains(pb,baseY,height,c1,c2,scale,seed,snow){
+  for(let x=0;x<pb.w;x++){
+    const nx=x/pb.w*scale+seed,rh=fbm(nx,seed*7.3,5)*0.6+ridgeNoise(nx,seed*3.1,3)*0.4;
+    const peakY=Math.round(baseY-height*rh);
+    for(let y=peakY;y<pb.h;y++){
+      const d=(y-peakY)/height;
+      if(snow&&d<0.06&&height>pb.h*0.12)pb.setC(x,y,ditherC(x,y,snow,c1,d/0.06));
+      else pb.setC(x,y,ditherC(x,y,c1,c2,clamp(d*0.3,0,1)));
+    }
+  }
+}
+function drawGround(pb,level,c1,c2){
+  for(let y=level;y<pb.h;y++){const d=(y-level)/(pb.h-level);for(let x=0;x<pb.w;x++){
+    const n=fbm(x*0.08,y*0.08+SEED*3,3);pb.setC(x,y,n>0.5?c2:c1);
+  }}
+}
+function drawWater(pb,level,colors,time){
+  for(let y=level;y<pb.h;y++){
+    const d=(y-level)/(pb.h-level),ci=Math.min(Math.floor(d*colors.length),colors.length-1),c=colors[ci];
+    for(let x=0;x<pb.w;x++){
+      const wave=Math.sin(x*0.15+(time||0)*2+y*0.3)*0.5+0.5;
+      const rip=ditherC(x,y,c,colors[0],wave*0.3);
+      const ry=level-(y-level);
+      if(ry>=0){const s=pb.get(x+Math.floor(Math.sin(y*0.2+(time||0))*1.5),ry);pb.setC(x,y,[Math.round(s[0]*0.15+rip[0]*0.85),Math.round(s[1]*0.15+rip[1]*0.85),Math.round(s[2]*0.15+rip[2]*0.85)])}
+      else pb.setC(x,y,rip);
+    }
+  }
+}
+function drawMist(pb,level,thick,c){
+  for(let y=level-thick;y<level+thick;y++){const t=1-Math.abs(y-level)/thick;for(let x=0;x<pb.w;x++){
+    const n=fbm(x*0.03+SEED*2,y*0.05,3);if(n>0.4)pb.blend(x,y,c,Math.round(t*n*35));
+  }}
+}
+
+// ================================================================
+// WONDER SCENES
+// ================================================================
+
+const WONDERS = {
+
+// ---- 1. Pyramids of Giza ----
+'pyramids': {
+  name: 'Pyramids of Giza · Egypt',
+  render(pb, time) {
+    const w=pb.w, h=pb.h;
+    // Night sky
+    drawSky(pb, [hex('#08051a'),hex('#10082e'),hex('#1a1040'),hex('#2a1855'),hex('#3a2060')]);
+    drawStars(pb, Math.floor(w*h*0.006));
+    // Moon
+    drawSun(pb, Math.floor(w*0.82), Math.floor(h*0.15), Math.floor(w*0.03), hex('#f0f0d0'), hex('#c0b888'));
+    // Desert ground
+    const groundY = Math.floor(h * 0.58);
+    for (let y = groundY; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const n = fbm(x*0.04, y*0.06+SEED, 3);
+        const c = n > 0.55 ? hex('#d8b060') : n > 0.4 ? hex('#c8a050') : hex('#b89040');
+        pb.setC(x, y, c);
+      }
+    }
+    // Far dunes
+    for (let x = 0; x < w; x++) {
+      const duneH = fbm(x/w*4+SEED+20, SEED*2.3, 4) * h * 0.08;
+      const dy = Math.round(groundY - duneH);
+      for (let y = dy; y < groundY; y++) pb.setC(x, y, ditherC(x,y,hex('#a08040'),hex('#b89048'),(y-dy)/(groundY-dy)));
+    }
+    // Great Pyramid (center)
+    const px1 = Math.floor(w*0.42), py1 = groundY, ph1 = Math.floor(h*0.32);
+    const pw1 = Math.floor(ph1 * 1.3);
+    for (let y = py1 - ph1; y <= py1; y++) {
+      const progress = (y - (py1 - ph1)) / ph1;
+      const halfW = Math.floor(pw1 * progress / 2);
+      for (let x = px1 - halfW; x <= px1 + halfW; x++) {
+        const shade = (x < px1) ? 0.8 + progress * 0.2 : 0.6 + progress * 0.15;
+        const block = ((x + y) % 3 === 0) ? 0.92 : 1;
+        pb.setC(x, y, lerpC(hex('#c8a050'), hex('#a08030'), (1 - shade) * block));
+      }
+    }
+    // Second pyramid (right, smaller)
+    const px2 = Math.floor(w*0.62), ph2 = Math.floor(ph1*0.75);
+    const pw2 = Math.floor(ph2 * 1.3);
+    for (let y = py1 - ph2; y <= py1; y++) {
+      const progress = (y - (py1 - ph2)) / ph2;
+      const halfW = Math.floor(pw2 * progress / 2);
+      for (let x = px2 - halfW; x <= px2 + halfW; x++) {
+        const shade = (x < px2) ? 0.75 : 0.55;
+        pb.setC(x, y, lerpC(hex('#c0a050'), hex('#907838'), 1 - shade));
+      }
+    }
+    // Third pyramid (far right, smallest)
+    const px3 = Math.floor(w*0.76), ph3 = Math.floor(ph1*0.5);
+    const pw3 = Math.floor(ph3 * 1.3);
+    for (let y = py1 - ph3; y <= py1; y++) {
+      const progress = (y - (py1 - ph3)) / ph3;
+      const halfW = Math.floor(pw3 * progress / 2);
+      for (let x = px3 - halfW; x <= px3 + halfW; x++) {
+        pb.setC(x, y, lerpC(hex('#b09048'), hex('#887038'), 0.4));
+      }
+    }
+    // Sphinx silhouette (left)
+    const sx = Math.floor(w*0.2), sy = groundY;
+    const sBody = hex('#8a7030');
+    const sHead = hex('#a08040');
+    pb.rect(sx-6, sy-4, 14, 4, sBody);
+    pb.rect(sx-4, sy-6, 10, 2, sBody);
+    pb.rect(sx+4, sy-10, 4, 4, sHead);
+    pb.rect(sx+5, sy-12, 2, 2, sHead);
+    // Atmospheric haze
+    drawMist(pb, groundY, 12, hex('#2a1840'));
+  }
+},
+
+// ---- 2. Great Wall of China ----
+'great-wall': {
+  name: 'Great Wall · China',
+  render(pb, time) {
+    const w=pb.w, h=pb.h;
+    // Misty dawn sky
+    drawSky(pb, [hex('#1a2838'),hex('#2a3848'),hex('#4a6070'),hex('#7a9098'),hex('#a8c0b8'),hex('#d0dcd0')]);
+    drawSun(pb, Math.floor(w*0.75), Math.floor(h*0.2), Math.floor(w*0.05), hex('#ffe8c0'), hex('#d0c090'));
+    // Layered misty mountains
+    drawMountains(pb, Math.floor(h*0.4), h*0.35, hex('#4a6058'), hex('#5a7068'), 3, 1, hex('#c8d0c0'));
+    drawMountains(pb, Math.floor(h*0.48), h*0.3, hex('#3a5048'), hex('#4a6058'), 4, 5, hex('#a8b8a0'));
+    drawMountains(pb, Math.floor(h*0.55), h*0.25, hex('#2a4038'), hex('#3a5048'), 5, 9, null);
+    // Green hills foreground
+    const hillY = Math.floor(h * 0.6);
+    for (let x = 0; x < w; x++) {
+      const hy = hillY - Math.floor(fbm(x/w*6+SEED+30, SEED*4, 4) * h * 0.12);
+      for (let y = hy; y < h; y++) {
+        const d = (y-hy)/(h-hy);
+        pb.setC(x, y, ditherC(x,y, hex('#1a3020'), hex('#2a4830'), d*0.5));
+      }
+    }
+    // Great Wall — follows terrain
+    const wallColor = hex('#a8a088');
+    const wallDark = hex('#808068');
+    const wallLight = hex('#c0b8a0');
+    const wallH = Math.max(4, Math.floor(h * 0.035));
+    for (let x = 0; x < w; x++) {
+      const baseNoise = fbm(x/w*5+SEED+15, SEED*3.7, 4);
+      const wallBaseY = Math.floor(h * 0.52 + baseNoise * h * 0.12 - h*0.04);
+      // Wall body
+      for (let dy = 0; dy < wallH; dy++) {
+        const shade = dy < 1 ? wallLight : dy < wallH - 1 ? wallColor : wallDark;
+        pb.setC(x, wallBaseY - dy, shade);
+      }
+      // Battlements every 6px
+      if (x % 6 < 2) {
+        pb.setC(x, wallBaseY - wallH, wallColor);
+        pb.setC(x, wallBaseY - wallH - 1, wallLight);
+      }
+      // Wall shadow on ground
+      pb.blend(x, wallBaseY + 1, [0,0,0], 30);
+    }
+    // Watchtower
+    const towerX = Math.floor(w * 0.45);
+    const towerBaseNoise = fbm(towerX/w*5+SEED+15, SEED*3.7, 4);
+    const towerBaseY = Math.floor(h * 0.52 + towerBaseNoise * h * 0.12 - h*0.04);
+    const towerH = Math.floor(h * 0.1);
+    const towerW = Math.max(8, Math.floor(w * 0.04));
+    // Tower body
+    pb.rect(towerX - towerW/2, towerBaseY - wallH - towerH, towerW, towerH + wallH, wallColor);
+    // Tower edges
+    for (let dy = 0; dy < towerH + wallH; dy++) {
+      pb.setC(towerX - towerW/2, towerBaseY - wallH - towerH + dy, wallDark);
+      pb.setC(towerX + towerW/2 - 1, towerBaseY - wallH - towerH + dy, wallDark);
+    }
+    // Tower roof (Chinese style)
+    const roofY = towerBaseY - wallH - towerH;
+    const roofW = towerW + 4;
+    pb.rect(towerX - roofW/2, roofY - 1, roofW, 1, hex('#4a3020'));
+    pb.rect(towerX - roofW/2 - 1, roofY - 2, roofW + 2, 1, hex('#5a3828'));
+    pb.rect(towerX - roofW/2 + 1, roofY - 3, roofW - 2, 1, hex('#4a3020'));
+    // Tower window
+    pb.rect(towerX - 1, roofY + Math.floor(towerH*0.3), 3, 3, hex('#1a1a10'));
+    // Second tower
+    const t2X = Math.floor(w * 0.72);
+    const t2BaseNoise = fbm(t2X/w*5+SEED+15, SEED*3.7, 4);
+    const t2BaseY = Math.floor(h * 0.52 + t2BaseNoise * h * 0.12 - h*0.04);
+    const t2H = Math.floor(towerH * 0.8);
+    pb.rect(t2X - towerW/2, t2BaseY - wallH - t2H, towerW, t2H + wallH, hex('#908870'));
+    pb.rect(t2X - roofW/2, t2BaseY - wallH - t2H - 1, roofW, 1, hex('#4a3020'));
+    pb.rect(t2X - roofW/2 - 1, t2BaseY - wallH - t2H - 2, roofW + 2, 1, hex('#5a3828'));
+    // Mist layers
+    drawMist(pb, Math.floor(h*0.45), 10, hex('#8aa090'));
+    drawMist(pb, Math.floor(h*0.6), 8, hex('#506858'));
+    // Pine trees on hillside
+    const treeC = [hex('#0a1a10'), hex('#142818'), hex('#1e3820')];
+    for (let i = 0; i < Math.floor(w/5); i++) {
+      const tx = Math.floor(hash2D(i*17+SEED, i*31)*w);
+      const tn = fbm(tx/w*6+SEED+30, SEED*4, 4);
+      const ty = Math.floor(h*0.6 - tn*h*0.12 + hash2D(i*23, SEED)*6);
+      const th = 4 + Math.floor(hash2D(i*37+SEED, i*53)*5);
+      // Simple pine
+      pb.setC(tx, ty, treeC[0]); pb.setC(tx, ty-1, treeC[0]);
+      for(let l=0;l<Math.floor(th/2);l++){const ly=ty-2-l*2,hw=Math.floor(th/2)-l;const c=l<th/4?treeC[2]:treeC[1];for(let dx=-hw;dx<=hw;dx++){pb.setC(tx+dx,ly,c);if(Math.abs(dx)<hw)pb.setC(tx+dx,ly-1,c)}}
+    }
+  }
+},
+
+// ---- 3. Forbidden City ----
+'forbidden-city': {
+  name: 'Forbidden City · Beijing',
+  render(pb, time) {
+    const w=pb.w, h=pb.h;
+    drawSky(pb, [hex('#1a0820'),hex('#3a1838'),hex('#6a2848'),hex('#b04838'),hex('#d07038'),hex('#e8a050')]);
+    drawSun(pb, Math.floor(w*0.5), Math.floor(h*0.25), Math.floor(w*0.06), hex('#ffd880'), hex('#e0a040'));
+    // Distant mountains
+    drawMountains(pb, Math.floor(h*0.45), h*0.15, hex('#3a2030'), hex('#4a2838'), 3, 1, null);
+    // Ground
+    const groundY = Math.floor(h * 0.65);
+    for(let y=groundY;y<h;y++)for(let x=0;x<w;x++){
+      const n=fbm(x*0.05,y*0.05+SEED,2);
+      pb.setC(x,y,n>0.5?hex('#504030'):hex('#403028'));
+    }
+    // Main hall — Taihe Dian (Hall of Supreme Harmony)
+    const cx=Math.floor(w*0.5);
+    const baseY=groundY;
+    const hallW=Math.floor(w*0.4), hallH=Math.floor(h*0.15);
+    const roofH=Math.floor(h*0.1);
+    // Marble platform (3 tiers)
+    for(let tier=0;tier<3;tier++){
+      const tw=hallW+12-tier*4, ty=baseY-tier*2;
+      pb.rect(cx-tw/2, ty-2, tw, 2, hex('#d0c8b8'));
+      for(let x=cx-tw/2;x<cx+tw/2;x++)pb.setC(x,ty-2,hex('#e0d8c8'));
+    }
+    const platTop=baseY-6;
+    // Red walls
+    const wallTop=platTop-hallH;
+    pb.rect(cx-hallW/2, wallTop, hallW, hallH, hex('#8b2020'));
+    // Pillars
+    for(let px=cx-hallW/2+2;px<cx+hallW/2;px+=Math.floor(hallW/7)){
+      for(let y=wallTop;y<platTop;y++)pb.setC(px,y,hex('#a02828'));
+    }
+    // Doors
+    pb.rect(cx-3, wallTop+Math.floor(hallH*0.3), 7, hallH-Math.floor(hallH*0.3), hex('#601010'));
+    pb.rect(cx-2, wallTop+Math.floor(hallH*0.35), 5, 2, hex('#d4af37'));
+    // Yellow glazed tile roof
+    const roofBase=wallTop;
+    const roofWidth=hallW+8;
+    // Curved roof using parabola
+    for(let x=-roofWidth/2;x<=roofWidth/2;x++){
+      const nx=x/(roofWidth/2);
+      const curve=nx*nx*roofH*0.7;
+      const ry=Math.round(roofBase-roofH+curve);
+      for(let y=ry;y<=roofBase;y++){
+        const py=cx+Math.round(x);
+        if(y===ry||y===ry+1)pb.setC(py,y,hex('#e8c020'));
+        else if(y<roofBase-1)pb.setC(py,y,hex('#d4a818'));
+        else pb.setC(py,y,hex('#b89010'));
+      }
+    }
+    // Ridge decorations
+    pb.setC(cx, roofBase-roofH-1, hex('#d4af37'));
+    pb.setC(cx-1, roofBase-roofH-1, hex('#d4af37'));
+    pb.setC(cx+1, roofBase-roofH-1, hex('#d4af37'));
+    pb.setC(cx, roofBase-roofH-2, hex('#e8c838'));
+    // Roof edges — upturned eaves
+    for(let side=-1;side<=1;side+=2){
+      const ex=cx+side*Math.floor(roofWidth/2);
+      pb.setC(ex, roofBase-2, hex('#e8c020'));
+      pb.setC(ex+side, roofBase-3, hex('#e8c020'));
+      pb.setC(ex+side*2, roofBase-4, hex('#d4af37'));
+    }
+    // Side halls (smaller)
+    for(let side=-1;side<=1;side+=2){
+      const shx=cx+side*Math.floor(w*0.28);
+      const shW=Math.floor(hallW*0.4), shH=Math.floor(hallH*0.7);
+      const shRoofH=Math.floor(roofH*0.6);
+      pb.rect(shx-shW/2, platTop-shH, shW, shH, hex('#8b2020'));
+      // Small roof
+      const srW=shW+4;
+      for(let x=-srW/2;x<=srW/2;x++){
+        const nx=x/(srW/2), curve=nx*nx*shRoofH*0.7;
+        const ry=Math.round(platTop-shH-shRoofH+curve);
+        for(let y=ry;y<=platTop-shH;y++)pb.setC(shx+Math.round(x),y,y===ry?hex('#e8c020'):hex('#c89818'));
+      }
+    }
+    // Courtyard details — stone path
+    for(let x=cx-hallW/2;x<cx+hallW/2;x++){
+      if(x%4<2)pb.setC(x,baseY-1,hex('#c0b8a0'));
+    }
+    // Mist
+    drawMist(pb, Math.floor(h*0.5), 8, hex('#5a3040'));
+  }
+},
+
+// ---- 4. Taj Mahal ----
+'taj-mahal': {
+  name: 'Taj Mahal · India',
+  render(pb, time) {
+    const w=pb.w, h=pb.h;
+    drawSky(pb, [hex('#1a1030'),hex('#2a1848'),hex('#4a3068'),hex('#8a5888'),hex('#c888a0'),hex('#e8b8c0')]);
+    // Reflecting pool
+    const groundY=Math.floor(h*0.6);
+    const cx=Math.floor(w*0.5);
+    // Garden ground
+    for(let y=groundY;y<h;y++)for(let x=0;x<w;x++){
+      if(Math.abs(x-cx)<Math.floor(w*0.06)){
+        // Pool
+        const d=(y-groundY)/(h-groundY);
+        const c=d>0.5?hex('#1a1838'):hex('#2a2848');
+        pb.setC(x,y,c);
+      } else {
+        const n=fbm(x*0.08,y*0.08+SEED,2);
+        pb.setC(x,y,n>0.55?hex('#1a5020'):hex('#205828'));
+      }
+    }
+    // Main dome
+    const domeY=Math.floor(h*0.25), domeR=Math.floor(w*0.06);
+    const marble=hex('#e8e0d8'), marbleSh=hex('#c8c0b8'), marbleHi=hex('#f8f0e8');
+    // Central structure
+    const bodyW=Math.floor(w*0.18), bodyH=Math.floor(h*0.2);
+    const bodyTop=groundY-bodyH;
+    pb.rect(cx-bodyW/2, bodyTop, bodyW, bodyH, marble);
+    // Arch doorway
+    const archW=Math.floor(bodyW*0.3), archH=Math.floor(bodyH*0.6);
+    for(let y=0;y<archH;y++){
+      const progress=y/archH;
+      const halfW=progress<0.4?Math.floor(archW/2*(1-progress*0.3)):Math.floor(archW/2*(1-(progress-0.4)*1.5));
+      if(halfW<=0)continue;
+      for(let dx=-halfW;dx<=halfW;dx++)pb.setC(cx+dx,groundY-y,hex('#3a2030'));
+    }
+    // Dome
+    for(let dy=-domeR;dy<=domeR;dy++){
+      const rowW=Math.floor(Math.sqrt(domeR*domeR-dy*dy));
+      for(let dx=-rowW;dx<=rowW;dx++){
+        const py=bodyTop-Math.floor(domeR*0.3)+dy, px=cx+dx;
+        const shade=dx<0?marbleHi:marbleSh;
+        pb.setC(px,py,shade);
+      }
+    }
+    // Dome finial
+    pb.setC(cx, bodyTop-domeR-Math.floor(domeR*0.3)-1, hex('#d4af37'));
+    pb.setC(cx, bodyTop-domeR-Math.floor(domeR*0.3)-2, hex('#d4af37'));
+    // Four minarets
+    for(let side=-1;side<=1;side+=2){
+      for(let dist=0;dist<2;dist++){
+        const mx=cx+side*Math.floor(bodyW/2+4+dist*Math.floor(w*0.06));
+        const mH=Math.floor(bodyH*0.9);
+        const mW=2;
+        pb.rect(mx-1, groundY-mH, mW, mH, marbleSh);
+        // Minaret top
+        pb.setC(mx-1, groundY-mH-1, marble);
+        pb.setC(mx, groundY-mH-1, marble);
+        pb.setC(mx-1, groundY-mH-2, marbleHi);
+        pb.setC(mx, groundY-mH-2, hex('#d4af37'));
+      }
+    }
+    // Platform
+    pb.rect(cx-bodyW/2-4, groundY, bodyW+8, 3, marbleSh);
+    pb.rect(cx-bodyW/2-6, groundY+3, bodyW+12, 2, hex('#b0a898'));
+    // Pool reflection
+    for(let y=groundY+1;y<h;y++){
+      const ry=groundY-(y-groundY);
+      if(ry<0)continue;
+      for(let x=cx-Math.floor(w*0.06);x<cx+Math.floor(w*0.06);x++){
+        const src=pb.get(x,ry);
+        pb.blend(x,y,src,20+Math.floor(Math.sin(x*0.3+(time||0)*2)*5));
+      }
+    }
+    // Cypress trees
+    const treeC=hex('#0a2a10');
+    for(let side=-1;side<=1;side+=2){
+      for(let i=0;i<3;i++){
+        const tx=cx+side*Math.floor(w*0.12+i*w*0.06);
+        const ty=groundY;
+        for(let dy=0;dy<8;dy++){const hw=dy<2?0:dy<6?1:0;for(let dx=-hw;dx<=hw;dx++)pb.setC(tx+dx,ty-dy,treeC)}
+        pb.setC(tx,ty-8,treeC);pb.setC(tx,ty-9,treeC);
+      }
+    }
+  }
+},
+
+// ---- 5. Eiffel Tower ----
+'eiffel': {
+  name: 'Eiffel Tower · Paris',
+  render(pb, time) {
+    const w=pb.w, h=pb.h;
+    drawSky(pb, [hex('#0a0820'),hex('#1a1040'),hex('#2a1858'),hex('#4a2870'),hex('#8a4088'),hex('#c06088')]);
+    drawStars(pb, Math.floor(w*h*0.004));
+    // Seine river
+    const riverY=Math.floor(h*0.72);
+    drawGround(pb, riverY, hex('#1a1828'), hex('#141420'));
+    drawWater(pb, riverY, [hex('#0a0820'),hex('#101030'),hex('#181840')], time);
+    // City silhouette
+    for(let i=0;i<Math.floor(w/4);i++){
+      const bx=Math.floor(hash2D(i*11+SEED,100)*w);
+      const bw=3+Math.floor(hash2D(i*13+SEED,200)*5);
+      const bh=8+Math.floor(hash2D(i*17+SEED,300)*15);
+      const by=riverY-bh;
+      const bc=hash2D(i*19+SEED,400)>0.5?hex('#0c0c18'):hex('#101020');
+      pb.rect(bx,by,bw,bh,bc);
+      // Windows
+      for(let wy=by+1;wy<riverY-1;wy+=2)for(let wx=bx+1;wx<bx+bw-1;wx+=2){
+        if(hash2D(wx+SEED,wy)>0.5)pb.setC(wx,wy,hex('#ffd060'));
+      }
+    }
+    // Eiffel Tower
+    const cx=Math.floor(w*0.45);
+    const towerTop=Math.floor(h*0.12);
+    const towerBase=riverY;
+    const towerH=towerBase-towerTop;
+    const iron=hex('#404050'), ironL=hex('#606070'), ironD=hex('#2a2a38');
+    // Main structure — 4 sections
+    for(let y=towerTop;y<towerBase;y++){
+      const t=(y-towerTop)/towerH;
+      // Width expands from top to bottom, with curve
+      const halfW=Math.floor(1+t*t*w*0.12);
+      // Draw legs/body
+      if(t<0.15){
+        // Top section (antenna + narrow)
+        pb.setC(cx, y, ironL);
+        if(t>0.05){pb.setC(cx-1,y,iron);pb.setC(cx+1,y,iron)}
+      } else if(t<0.4){
+        // Upper section
+        const sw=Math.floor(1+((t-0.15)/0.25)*3);
+        for(let dx=-sw;dx<=sw;dx++)pb.setC(cx+dx,y,dx===0?ironL:iron);
+      } else if(t<0.7){
+        // Middle section — open lattice
+        const sw=Math.floor(3+((t-0.4)/0.3)*halfW*0.6);
+        // Left/right legs
+        pb.setC(cx-sw, y, iron); pb.setC(cx-sw+1, y, iron);
+        pb.setC(cx+sw, y, iron); pb.setC(cx+sw-1, y, iron);
+        // Cross bracing every few pixels
+        if(y%4===0)for(let dx=-sw;dx<=sw;dx++){if(dx%2===0)pb.setC(cx+dx,y,ironD)}
+      } else {
+        // Base — wide legs
+        const sw=halfW;
+        pb.setC(cx-sw, y, iron); pb.setC(cx-sw+1, y, ironL);
+        pb.setC(cx+sw, y, iron); pb.setC(cx+sw-1, y, ironL);
+        if(y%3===0){
+          for(let dx=-sw;dx<=sw;dx++){if(Math.abs(dx)%3===0)pb.setC(cx+dx,y,ironD)}
+        }
+      }
+    }
+    // Platforms
+    [0.35, 0.55, 0.75].forEach(level => {
+      const py=Math.floor(towerTop+towerH*level);
+      const t=(py-towerTop)/towerH;
+      const pw=Math.floor(2+t*t*w*0.14);
+      pb.rect(cx-pw, py, pw*2+1, 2, ironL);
+      // Platform lights
+      pb.setC(cx-pw, py, hex('#ffd060'));
+      pb.setC(cx+pw, py, hex('#ffd060'));
+    });
+    // Tower glow
+    for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(d>1&&d<3.5)pb.blend(cx+dx,towerTop+Math.floor(towerH*0.2)+dy,hex('#ffd060'),Math.round((1-d/3.5)*25));
+    }
+  }
+},
+
+// ---- 6. Colosseum ----
+'colosseum': {
+  name: 'Colosseum · Rome',
+  render(pb, time) {
+    const w=pb.w, h=pb.h;
+    drawSky(pb, [hex('#101830'),hex('#1a2848'),hex('#2a4868'),hex('#4a7898'),hex('#8ab0c0'),hex('#c0d8e0')]);
+    const groundY=Math.floor(h*0.65);
+    drawGround(pb, groundY, hex('#504838'), hex('#605040'));
+    const cx=Math.floor(w*0.5);
+    const coloW=Math.floor(w*0.5), coloH=Math.floor(h*0.28);
+    const coloTop=groundY-coloH;
+    const stone=hex('#c8b898'), stoneSh=hex('#a89878'), stoneDk=hex('#887858'), stoneHi=hex('#d8c8a8');
+    // Elliptical shape
+    const halfW=Math.floor(coloW/2), halfH=coloH;
+    for(let y=coloTop;y<groundY;y++){
+      const t=(y-coloTop)/coloH;
+      // Narrower at top
+      const rowHalfW=Math.floor(halfW*(0.85+t*0.15));
+      for(let x=cx-rowHalfW;x<=cx+rowHalfW;x++){
+        // Outer wall
+        const distFromEdge=Math.min(x-(cx-rowHalfW),(cx+rowHalfW)-x);
+        if(distFromEdge<2){pb.setC(x,y,stoneSh);continue}
+        // Tiers with arches
+        const tier=Math.floor(t*4);
+        const tierProgress=(t*4)-tier;
+        if(tierProgress>0.15&&tierProgress<0.85){
+          // Arch openings
+          const archPeriod=Math.max(3,Math.floor(rowHalfW/8));
+          const inArch=(x-cx+rowHalfW)%archPeriod;
+          if(inArch>1&&inArch<archPeriod-1&&tierProgress>0.25&&tierProgress<0.75){
+            pb.setC(x,y,hex('#302820'));// Dark arch interior
+          } else {
+            pb.setC(x,y,(x+y)%5===0?stoneHi:stone);
+          }
+        } else {
+          // Tier separator / cornice
+          pb.setC(x,y,stoneDk);
+        }
+      }
+    }
+    // Broken section (right side, ruin effect)
+    const breakStart=cx+Math.floor(halfW*0.5);
+    for(let x=breakStart;x<cx+halfW+2;x++){
+      const breakH=Math.floor((x-breakStart)*0.5+hash2D(x+SEED,999)*3);
+      for(let y=coloTop;y<coloTop+breakH;y++)pb.setC(x,y,pb.get(x,y+coloH)[3]>0?hex('#887858'):[0,0,0,0]);
+      // Rubble noise at break edge
+      if(hash2D(x+SEED,888)>0.5)pb.setC(x,coloTop+breakH,stoneSh);
+    }
+    // Road / foreground
+    for(let x=0;x<w;x++){
+      pb.setC(x,groundY,hex('#706050'));
+      if(x%8<4)pb.setC(x,groundY+1,hex('#605040'));
+    }
+    drawMist(pb, groundY-2, 5, hex('#8090a0'));
+  }
+},
+
+// ---- 7. Angkor Wat ----
+'angkor-wat': {
+  name: 'Angkor Wat · Cambodia',
+  render(pb, time) {
+    const w=pb.w, h=pb.h;
+    drawSky(pb, [hex('#0a1820'),hex('#1a3040'),hex('#2a5058'),hex('#4a8068'),hex('#80b078'),hex('#b0d890')]);
+    const groundY=Math.floor(h*0.6);
+    // Jungle
+    for(let y=groundY;y<h;y++)for(let x=0;x<w;x++){
+      const n=fbm(x*0.06,y*0.06+SEED,3);
+      pb.setC(x,y,n>0.55?hex('#1a3818'):hex('#0a2810'));
+    }
+    const cx=Math.floor(w*0.5);
+    const stoneC=hex('#a0906c'), stoneSh=hex('#808060'), stoneDk=hex('#605840'), stoneHi=hex('#c0b088');
+    // Main temple platform
+    const platW=Math.floor(w*0.4), platH=6;
+    pb.rect(cx-platW/2, groundY-platH, platW, platH, stoneSh);
+    // Gallery walls
+    const galH=Math.floor(h*0.08);
+    pb.rect(cx-platW/2+2, groundY-platH-galH, platW-4, galH, stoneC);
+    // Windows in gallery
+    for(let x=cx-platW/2+5;x<cx+platW/2-4;x+=4){
+      pb.rect(x, groundY-platH-galH+2, 2, galH-3, stoneDk);
+    }
+    // Central tower (tallest)
+    const towerH=Math.floor(h*0.25);
+    const towerW=Math.floor(w*0.05);
+    const towerBase=groundY-platH-galH;
+    // Tower body with tiers
+    for(let tier=0;tier<4;tier++){
+      const tw=towerW-tier*1, th=Math.floor(towerH/4);
+      const ty=towerBase-th*(tier+1);
+      pb.rect(cx-tw/2, ty, tw, th, tier%2===0?stoneC:stoneSh);
+      // Tier ledge
+      pb.rect(cx-tw/2-1, ty, tw+2, 1, stoneHi);
+    }
+    // Lotus top
+    const topY=towerBase-towerH;
+    pb.setC(cx, topY-2, stoneHi);
+    pb.setC(cx-1, topY-1, stoneHi);
+    pb.setC(cx+1, topY-1, stoneHi);
+    // Side towers (4)
+    for(let side=-1;side<=1;side+=2){
+      for(let dist=0;dist<2;dist++){
+        const tx=cx+side*Math.floor(platW*(0.2+dist*0.15));
+        const th=Math.floor(towerH*(0.6-dist*0.15));
+        for(let tier=0;tier<3;tier++){
+          const tw=towerW-1-tier, tth=Math.floor(th/3);
+          pb.rect(tx-tw/2, towerBase-tth*(tier+1), tw, tth, tier%2===0?stoneSh:stoneC);
+        }
+        pb.setC(tx, towerBase-th-1, stoneHi);
+      }
+    }
+    // Moat/water
+    const moatY=groundY+2;
+    drawWater(pb, moatY, [hex('#1a3828'),hex('#0a2818'),hex('#0a2010')], time);
+    // Jungle trees framing
+    const jungleC=[hex('#0a1808'),hex('#142810'),hex('#1e3818'),hex('#284a20')];
+    for(let i=0;i<Math.floor(w/4);i++){
+      const tx=Math.floor(hash2D(i*17+SEED,i*31)*w);
+      if(Math.abs(tx-cx)<platW/2+10)continue;
+      const ty=groundY-Math.floor(hash2D(i*23,SEED)*4);
+      const th=8+Math.floor(hash2D(i*37+SEED,i*53)*8);
+      const r=Math.floor(th*0.5);
+      const lcy=ty-th+r;
+      for(let dy=-r;dy<=r;dy++)for(let dx=-r-1;dx<=r+1;dx++){
+        if(Math.sqrt(dx*dx+dy*dy)>r+0.5)continue;
+        const n=fbm((tx+dx)*0.2,(lcy+dy)*0.2+SEED,2);
+        if(n>0.3)pb.setC(tx+dx,lcy+dy,jungleC[Math.floor(n*jungleC.length)%jungleC.length]);
+      }
+      pb.setC(tx,ty,jungleC[0]);pb.setC(tx,ty-1,jungleC[0]);
+    }
+    drawMist(pb, Math.floor(h*0.55), 8, hex('#406048'));
+  }
+},
+
+// ---- 8. Stonehenge ----
+'stonehenge': {
+  name: 'Stonehenge · England',
+  render(pb, time) {
+    const w=pb.w, h=pb.h;
+    // Dramatic dusk sky
+    drawSky(pb, [hex('#0a0818'),hex('#1a1838'),hex('#2a2858'),hex('#4a4070'),hex('#7a6080'),hex('#a88890')]);
+    drawStars(pb, Math.floor(w*h*0.003));
+    // Moon
+    drawSun(pb, Math.floor(w*0.25), Math.floor(h*0.18), Math.floor(w*0.035), hex('#e8e8d0'), hex('#a8a890'));
+    // Rolling green hills
+    const groundY=Math.floor(h*0.62);
+    for(let x=0;x<w;x++){
+      const hillH=fbm(x/w*3+SEED+50,SEED*5,4)*h*0.06;
+      const hy=Math.round(groundY-hillH);
+      for(let y=hy;y<h;y++){
+        const d=(y-hy)/(h-hy);
+        pb.setC(x,y,ditherC(x,y,hex('#1a3020'),hex('#2a4830'),d));
+      }
+    }
+    // Stonehenge stones
+    const cx=Math.floor(w*0.5);
+    const stoneC=hex('#707068'), stoneSh=hex('#505048'), stoneHi=hex('#909088'), stoneDk=hex('#383830');
+    // Outer circle — standing stones
+    const radius=Math.floor(w*0.12);
+    const stoneCount=10;
+    const stoneW=Math.max(3,Math.floor(w*0.02));
+    const stoneH=Math.floor(h*0.12);
+    const drawnStones=[];
+    for(let i=0;i<stoneCount;i++){
+      const angle=i/stoneCount*Math.PI*2;
+      const sx=cx+Math.round(Math.cos(angle)*radius);
+      const sy=groundY-Math.round(Math.sin(angle)*radius*0.3);// Perspective
+      // Standing stone
+      const thisH=stoneH-Math.floor(hash2D(i+SEED,777)*4);
+      // Front stones only (perspective)
+      if(Math.sin(angle)<-0.3){
+        // Behind — draw darker, shorter
+        const c=stoneDk;
+        pb.rect(sx-stoneW/2|0, sy-thisH*0.7|0, stoneW, thisH*0.7|0, c);
+      } else {
+        // Front
+        const shade=Math.cos(angle)>0?stoneHi:stoneSh;
+        for(let dy=0;dy<thisH;dy++){
+          const topRound=dy<2?stoneW-1:stoneW;
+          for(let dx=0;dx<topRound;dx++){
+            pb.setC(sx-Math.floor(topRound/2)+dx, sy-dy, dy<2?stoneHi:shade);
+          }
+        }
+        drawnStones.push({x:sx, y:sy, h:thisH, i});
+      }
+      // Lintels — connect adjacent stones
+      if(i>0&&i<stoneCount){
+        const prevAngle=(i-1)/stoneCount*Math.PI*2;
+        if(Math.sin(angle)>=-0.3&&Math.sin(prevAngle)>=-0.3){
+          const px=cx+Math.round(Math.cos(prevAngle)*radius);
+          const py=groundY-Math.round(Math.sin(prevAngle)*radius*0.3);
+          const ly1=sy-thisH, ly2=py-stoneH+Math.floor(hash2D(i-1+SEED,777)*4);
+          // Lintel block
+          const lx1=Math.min(sx,px), lx2=Math.max(sx,px);
+          for(let lx=lx1;lx<=lx2;lx++){
+            const lt=(lx-lx1)/(lx2-lx1||1);
+            const ly=Math.round(lerp(ly1,ly2,lt));
+            pb.setC(lx,ly,stoneC);
+            pb.setC(lx,ly+1,stoneSh);
+          }
+        }
+      }
+    }
+    // Inner trilithons (horseshoe)
+    const innerR=Math.floor(radius*0.5);
+    for(let i=0;i<5;i++){
+      const angle=i/5*Math.PI+Math.PI*0.1;
+      if(angle>Math.PI)continue;
+      const sx=cx+Math.round(Math.cos(angle)*innerR);
+      const sy=groundY-Math.round(Math.sin(angle)*innerR*0.3);
+      const tH=Math.floor(stoneH*1.2);
+      // Two pillars + lintel
+      for(let s=-1;s<=1;s+=2){
+        const px=sx+s*2;
+        for(let dy=0;dy<tH;dy++)pb.setC(px,sy-dy,stoneC);
+      }
+      // Lintel
+      for(let dx=-3;dx<=3;dx++){pb.setC(sx+dx,sy-tH,stoneHi);pb.setC(sx+dx,sy-tH+1,stoneC)}
+    }
+    // Heel stone (far)
+    pb.rect(cx+Math.floor(radius*1.5), groundY-6, 3, 6, stoneSh);
+    // Mist
+    drawMist(pb, groundY-2, 6, hex('#405048'));
+  }
+},
+
+};
+
+// ================================================================
+// RENDERER
+// ================================================================
+let W=192, H=128, SCALE=4, SCENE='pyramids';
+let pb, canvas, ctx, tCanvas, tCtx, animTime=0, animFrame=null;
+
+const WONDER_NAMES = {
+  'pyramids':'Pyramids of Giza · Egypt',
+  'great-wall':'Great Wall · China',
+  'forbidden-city':'Forbidden City · Beijing',
+  'taj-mahal':'Taj Mahal · India',
+  'eiffel':'Eiffel Tower · Paris',
+  'colosseum':'Colosseum · Rome',
+  'angkor-wat':'Angkor Wat · Cambodia',
+  'stonehenge':'Stonehenge · England',
+};
+
+function init(){
+  canvas=document.getElementById('canvas');
+  ctx=canvas.getContext('2d');
+  resize();
+}
+
+function resize(){
+  canvas.width=W*SCALE; canvas.height=H*SCALE;
+  canvas.style.maxWidth='95vw'; canvas.style.maxHeight='calc(95vh - 60px)';
+  const aspect=W/H, maxW=window.innerWidth*0.95, maxH=(window.innerHeight-60)*0.95;
+  if(maxW/maxH>aspect){canvas.style.height=maxH+'px';canvas.style.width=(maxH*aspect)+'px'}
+  else{canvas.style.width=maxW+'px';canvas.style.height=(maxW/aspect)+'px'}
+  tCanvas=document.createElement('canvas');tCanvas.width=W;tCanvas.height=H;
+  tCtx=tCanvas.getContext('2d');
+}
+
+function render(time){
+  pb=new PB(W,H);
+  const wonder=WONDERS[SCENE];
+  if(wonder)wonder.render(pb,time||0);
+  const img=new ImageData(pb.buf,W,H);
+  tCtx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(tCanvas,0,0,W*SCALE,H*SCALE);
+}
+
+function animate(){animTime+=0.016;render(animTime);animFrame=requestAnimationFrame(animate)}
+
+function startRender(){
+  if(animFrame)cancelAnimationFrame(animFrame);
+  resize();
+  document.getElementById('info').textContent=`${W}×${H} · ${SCALE}x · ${SCENE}`;
+  document.getElementById('wonder-name').textContent=WONDER_NAMES[SCENE]||SCENE;
+  const hasWater=['taj-mahal','angkor-wat','eiffel'].includes(SCENE);
+  if(hasWater){animTime=0;animate()}else render(0);
+}
+
+// ======== UI ========
+document.querySelectorAll('.scene-btn').forEach(b=>{b.addEventListener('click',()=>{
+  document.querySelectorAll('.scene-btn').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); SCENE=b.dataset.scene; startRender();
+})});
+document.querySelectorAll('.size-btn').forEach(b=>{b.addEventListener('click',()=>{
+  document.querySelectorAll('.size-btn').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); W=parseInt(b.dataset.w);H=parseInt(b.dataset.h); startRender();
+})});
+document.querySelectorAll('.scale-btn').forEach(b=>{b.addEventListener('click',()=>{
+  document.querySelectorAll('.scale-btn').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); SCALE=parseInt(b.dataset.s); startRender();
+})});
+document.getElementById('btn-regen').addEventListener('click',()=>{SEED=Math.random()*99999|0;startRender()});
+
+init(); startRender();
+</script>
+</body>
+</html>

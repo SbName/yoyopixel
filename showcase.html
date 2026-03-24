@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelAI — Full Showcase</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #08080f;
+    font-family: 'Courier New', monospace;
+    color: #eee;
+  }
+
+  /* ========== Navigation ========== */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    display: flex; gap: 0;
+    background: rgba(8,8,15,0.95);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #1a1a2e;
+    overflow-x: auto;
+  }
+
+  nav a {
+    padding: 12px 20px;
+    color: #555;
+    text-decoration: none;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+
+  nav a:hover { color: #e94560; }
+  nav a.active { color: #e94560; border-bottom-color: #e94560; }
+
+  /* ========== Sections ========== */
+  .section {
+    min-height: 100vh;
+    padding: 80px 24px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-bottom: 1px solid #0f0f1a;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .section-header h2 {
+    font-size: 22px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #e94560;
+    text-shadow: 0 0 15px rgba(233,69,96,0.3);
+    margin-bottom: 8px;
+  }
+
+  .section-header .sub {
+    font-size: 11px;
+    color: #444;
+    letter-spacing: 2px;
+  }
+
+  /* ========== Gallery grid ========== */
+  .gallery {
+    display: flex; flex-wrap: wrap; gap: 24px;
+    justify-content: center; align-items: flex-end;
+    max-width: 1200px;
+  }
+
+  .card {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 10px;
+  }
+
+  .card .label {
+    font-size: 10px; color: #666; letter-spacing: 2px; text-transform: uppercase;
+  }
+
+  .card .meta {
+    font-size: 9px; color: #333; letter-spacing: 1px;
+  }
+
+  .frame {
+    background: #10142a;
+    border: 1px solid #1a2040;
+    border-radius: 8px;
+    padding: 20px;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+
+  .frame:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 24px rgba(233,69,96,0.15);
+  }
+
+  .pixel-grid {
+    display: grid; gap: 0;
+    image-rendering: pixelated;
+  }
+
+  /* ========== Icon card ========== */
+  .icon-card {
+    padding: 16px 12px;
+    background: #10142a;
+    border: 1px solid #1a2040;
+    border-radius: 8px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 8px;
+    transition: all 0.2s;
+    min-width: 90px;
+  }
+
+  .icon-card:hover {
+    transform: translateY(-3px);
+    border-color: #2a3060;
+  }
+
+  @keyframes bounce {
+    0%,100% { transform: scale(1); }
+    40% { transform: scale(1.12); }
+    70% { transform: scale(0.95); }
+  }
+
+  .icon-card:hover .pixel-grid { animation: bounce 0.4s ease; }
+
+  /* ========== CSS pixel art ========== */
+  .pixel-art-css {
+    width: 1px; height: 1px;
+    transform-origin: top left;
+    image-rendering: pixelated;
+    background: transparent;
+  }
+
+  @keyframes idle {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+
+  .frame:hover .pixel-art-css,
+  .frame:hover .pixel-grid {
+    animation: idle 0.6s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%,90%,100% { opacity: 1; }
+    95% { opacity: 0.2; }
+  }
+
+  /* ========== Scene cards ========== */
+  .scene-gallery {
+    display: flex; flex-wrap: wrap; gap: 32px;
+    justify-content: center; max-width: 1200px;
+  }
+
+  .scene-card {
+    width: 340px;
+    background: #10142a;
+    border: 1px solid #1a2040;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+
+  .scene-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(233,69,96,0.15);
+    border-color: #2a3060;
+  }
+
+  .scene-preview {
+    height: 200px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+
+  .scene-info {
+    padding: 16px;
+  }
+
+  .scene-info h3 {
+    font-size: 14px; color: #ddd;
+    letter-spacing: 2px; margin-bottom: 4px;
+  }
+
+  .scene-info .desc {
+    font-size: 10px; color: #555;
+    letter-spacing: 1px; line-height: 1.6;
+  }
+
+  .scene-info .tags {
+    margin-top: 8px;
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+
+  .tag {
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid #1e2240;
+    color: #555;
+    letter-spacing: 1px;
+  }
+
+  .tag.pink { border-color: #e9456040; color: #e94560; }
+  .tag.cyan { border-color: #00c8ff40; color: #00c8ff; }
+  .tag.gold { border-color: #ffd70040; color: #d4af37; }
+  .tag.green { border-color: #00ff8840; color: #00ff88; }
+
+  /* ========== Landscape link ========== */
+  .landscape-card {
+    max-width: 600px;
+    width: 100%;
+    background: linear-gradient(135deg, #10142a, #1a1040);
+    border: 1px solid #2a2060;
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+    text-decoration: none;
+    display: block;
+  }
+
+  .landscape-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 40px rgba(106,13,131,0.2);
+    border-color: #4a2080;
+  }
+
+  .landscape-card h3 {
+    font-size: 18px;
+    color: #e94560;
+    letter-spacing: 4px;
+    margin-bottom: 12px;
+  }
+
+  .landscape-card p {
+    font-size: 11px;
+    color: #555;
+    line-height: 1.8;
+    letter-spacing: 1px;
+  }
+
+  .landscape-card .features {
+    margin-top: 16px;
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  }
+
+  /* ========== Scale controls ========== */
+  .controls {
+    display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
+    justify-content: center; align-items: center;
+  }
+
+  .controls span { font-size: 10px; color: #444; letter-spacing: 1px; }
+
+  .controls button {
+    background: #12162a; border: 1px solid #1e2240;
+    color: #666; font-family: 'Courier New', monospace;
+    font-size: 10px; padding: 4px 12px;
+    border-radius: 3px; cursor: pointer; transition: all 0.2s;
+  }
+  .controls button:hover { border-color: #e94560; color: #e94560; }
+  .controls button.active { background: #e94560; border-color: #e94560; color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav id="nav">
+  <a href="#icons" class="active">Icons</a>
+  <a href="#sprites">Sprites</a>
+  <a href="#avatars">Avatars</a>
+  <a href="#characters">Characters</a>
+  <a href="#scenes">Scenes</a>
+  <a href="#landscape">Landscape</a>
+  <a href="#wonders">Wonders</a>
+</nav>
+
+<!-- ============================================================
+     SECTION 1: Icons 8×8
+     ============================================================ -->
+<div class="section" id="icons">
+  <div class="section-header">
+    <h2>Micro Icons</h2>
+    <div class="sub">8&times;8 &middot; 3-5 colors &middot; Minimal detail</div>
+  </div>
+  <div class="controls">
+    <span>SCALE:</span>
+    <button class="icon-scale" data-s="4">4x</button>
+    <button class="icon-scale active" data-s="6">6x</button>
+    <button class="icon-scale" data-s="8">8x</button>
+    <button class="icon-scale" data-s="10">10x</button>
+  </div>
+  <div id="icon-gallery" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 2: Sprites 12×12
+     ============================================================ -->
+<div class="section" id="sprites">
+  <div class="section-header">
+    <h2>Mini Sprites</h2>
+    <div class="sub">12&times;12 &middot; 5-8 colors &middot; Standard detail</div>
+  </div>
+  <div id="sprite-gallery" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 3: Avatars 16×16 (CSS box-shadow)
+     ============================================================ -->
+<div class="section" id="avatars">
+  <div class="section-header">
+    <h2>Avatars</h2>
+    <div class="sub">16&times;16 &middot; 5-7 colors &middot; Pure CSS box-shadow render</div>
+  </div>
+  <div id="avatar-gallery" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 4: Characters 24×24, 32×32
+     ============================================================ -->
+<div class="section" id="characters">
+  <div class="section-header">
+    <h2>Characters</h2>
+    <div class="sub">24&times;24 ~ 32&times;32 &middot; 10-18 colors &middot; Detailed</div>
+  </div>
+  <div class="controls">
+    <span>SCALE:</span>
+    <button class="char-scale" data-s="3">3x</button>
+    <button class="char-scale active" data-s="5">5x</button>
+    <button class="char-scale" data-s="7">7x</button>
+  </div>
+  <div id="char-gallery" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 5: Animated Scenes
+     ============================================================ -->
+<div class="section" id="scenes">
+  <div class="section-header">
+    <h2>Animated Scenes</h2>
+    <div class="sub">Full scene render with atmosphere, particles &amp; per-pixel animation</div>
+  </div>
+  <div class="scene-gallery" id="scene-gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 6: Landscape Generator
+     ============================================================ -->
+<div class="section" id="landscape">
+  <div class="section-header">
+    <h2>Landscape Generator</h2>
+    <div class="sub">Procedural pixel art &middot; FBM noise + ordered dithering &middot; Phone screen size</div>
+  </div>
+  <a href="landscape.html" class="landscape-card">
+    <h3>OPEN GENERATOR</h3>
+    <p>
+      Procedural pixel landscapes powered by Fractal Brownian Motion noise,<br>
+      Bayer ordered dithering, and layered terrain generation.
+    </p>
+    <div class="features">
+      <span class="tag pink">5 Scene Presets</span>
+      <span class="tag cyan">Up to 256&times;144</span>
+      <span class="tag gold">Phone Screen Size</span>
+      <span class="tag green">Water Animation</span>
+    </div>
+  </a>
+</div>
+
+<!-- ============================================================
+     SECTION 7: World Wonders
+     ============================================================ -->
+<div class="section" id="wonders">
+  <div class="section-header">
+    <h2>World Wonders</h2>
+    <div class="sub">Procedural pixel art &middot; Iconic landmarks &middot; Canvas-based rendering</div>
+  </div>
+  <a href="wonders.html" class="landscape-card" style="border-color:#d4af3740;">
+    <h3 style="color:#d4af37;">WORLD WONDERS GALLERY</h3>
+    <p>
+      Pixel art renderings of iconic world landmarks:<br>
+      Pyramids, Great Wall, Forbidden City, Taj Mahal, Eiffel Tower, Colosseum, Angkor Wat, Stonehenge
+    </p>
+    <div class="features">
+      <span class="tag gold">8 Landmarks</span>
+      <span class="tag pink">Procedural</span>
+      <span class="tag cyan">Multiple Sizes</span>
+      <span class="tag green">Animated Water</span>
+    </div>
+  </a>
+</div>
+
+<script>
+// ================================================================
+// ALL PIXEL DATA
+// ================================================================
+
+// ---- ICONS 8×8 ----
+const ICONS = [
+  { name:'Heart', p:{'R':'#e94560','P':'#ff6b8a'}, d:['........','.RR.RR..','RPPRRPPR','RPPPPPPR','.RPPPPPR','..RPPR..','...RR...','........'] },
+  { name:'Star', p:{'Y':'#ffd700','G':'#ffaa00'}, d:['...YY...','...YY...','.YYYYYY.','YYGYYGYY','..YGGY..','.YYGGYY.','.YY..YY.','YY....YY'] },
+  { name:'Sword', p:{'A':'#c8ccd4','G':'#d4af37','D':'#708090'}, d:['......AA','.....AA.','....AA..','...AA...','..AA....','.GAAG...','..GG....','..DD....'] },
+  { name:'Shield', p:{'B':'#3a6fbf','L':'#5a9fef','G':'#d4af37','D':'#2a4f8f'}, d:['.GBBBBG.','GBLLLLBG','BLLGGLLB','BLLGGLLB','BLLLLLLB','.BLLLLB.','..BDDB..','...BB...'] },
+  { name:'Potion', p:{'G':'#a0a0a0','R':'#e94560','P':'#ff6b8a','D':'#707070'}, d:['..GGGG..','...GG...','..GGGG..','.RRRRRR.','.RPPPPR.','.RPPPPR.','.RRRRRR.','..RRRR..'] },
+  { name:'Key', p:{'G':'#d4af37','D':'#a08030'}, d:['.GGGG...','G....G..','G....G..','.GGGGG..','...G....','...GG...','...G....','...GG...'] },
+  { name:'Chest', p:{'B':'#8b4513','L':'#cd853f','G':'#d4af37','D':'#5c2d00'}, d:['........','.BBBBBB.','BLLLLLLD','BLGGGLLB','BBBBBBBB','BLLLLLLD','BLLLLLLD','BDDDDDDB'] },
+  { name:'Crown', p:{'G':'#d4af37','Y':'#ffd700','R':'#e94560'}, d:['G..G..G.','GG.G.GG.','GGRGRGG.','GGGGGGG.','GYYYYYG.','.GGGGG..','........','........'] },
+  { name:'Skull', p:{'W':'#e0e0e0','B':'#2c2c2c','G':'#a0a0a0'}, d:['..WWWW..','.WWWWWW.','WBWWWBWW','WWWWWWWW','WWWGGWWW','.WGWWGW.','..WWWW..','........'] },
+  { name:'Gem', p:{'B':'#2196F3','L':'#64B5F6','D':'#1565C0','W':'#E3F2FD'}, d:['........','..BBBB..','.BWLLBB.','BWLLLBDB','BLLLDDB.','.BLDDB..','..BBB...','........'] },
+  { name:'Mushroom', p:{'R':'#e94560','W':'#f5f5f5','B':'#d4a574','D':'#8b6914'}, d:['..RRRR..','.RWRWRR.','RRWRRWRR','RRRRRRRR','..BBBB..','..BBBB..','..BBBB..','.DDDDDD.'] },
+  { name:'Flame', p:{'R':'#e94560','O':'#ff6600','Y':'#ffcc00'}, d:['...OO...','..OYO...','..OYOO..','.OYYYO..','.OYYYO..','.ROYOR..','..RRR...','........'] },
+];
+
+// ---- SPRITES 12×12 ----
+const SPRITES = [
+  { name:'Skull', w:12, p:{'W':'#e0e0e0','G':'#a0a0a0','D':'#606060','B':'#2c2c2c','R':'#e94560'}, d:['....WWWW....','..WWWWWWWW..','.WWWWWWWWWW.','.WWWWWWWWWW.','WWBWWWWWBWWW','WWBWWWWWBWWW','WWWWWDDWWWWW','.WWWWWWWWWW.','.WWRWRRWRWW.','..WRWRRWRW..','...WWWWWW...','....WWWW....'] },
+  { name:'Ghost', w:12, p:{'W':'#e8e8e8','L':'#f5f5f5','G':'#c0c0c0','B':'#2c2c2c'}, d:['....WWWW....','..WWWWWWWW..','.WWWWWWWWWW.','.WLWWWWLWWW.','.WBWWWWBWWW.','WWWWWWWWWWWW','WWWWWGWWWWWW','WWWWGGWWWWWW','WWWWWWWWWWWW','WWWWWWWWWWWW','WW.WW.WW.WW.','.W..W..W..W.'] },
+  { name:'Alien', w:12, p:{'G':'#00ff88','D':'#00cc6a','K':'#009950','B':'#2c2c2c','W':'#ffffff'}, d:['....GGGG....','..GGGGGGGG..','.GGGGGGGGGG.','GDDGGGGGGDDG','GBWGGGGGGWBG','GGGGGGGGGGGG','GGGGGDDGGGGG','.GGGGGGGGGG.','..GGGKKGGG..','...KGGGK....','..KK..KK....','.KK....KK...'] },
+  { name:'Slime', w:12, p:{'G':'#4ade80','L':'#86efac','D':'#22c55e','K':'#16a34a','W':'#ffffff','B':'#1a1a2e'}, d:['............','....GGGG....','..GGGGGGGG..','.GGLGGGGLGG.','.GGGGGGGGGG.','GGWBGGWBGGGG','GGGGGGGGGGGG','GGGGGDDGGGGG','.GGGGGGGGGG.','.GDDGGGGDDG.','..KKKKKKKK..','............'] },
+];
+
+// ---- CSS AVATARS 16×16 ----
+const AVATARS_CSS = [
+  { name:'COOL GUY', meta:'16×16 · 7 colors · CSS', blink:false, scale:6, shadows:'5px 0 #3d2b1f,6px 0 #3d2b1f,7px 0 #3d2b1f,8px 0 #3d2b1f,9px 0 #3d2b1f,10px 0 #3d2b1f,4px 1px #3d2b1f,5px 1px #3d2b1f,6px 1px #3d2b1f,7px 1px #3d2b1f,8px 1px #3d2b1f,9px 1px #3d2b1f,10px 1px #3d2b1f,11px 1px #3d2b1f,3px 2px #3d2b1f,4px 2px #3d2b1f,5px 2px #3d2b1f,6px 2px #3d2b1f,7px 2px #3d2b1f,8px 2px #3d2b1f,9px 2px #3d2b1f,10px 2px #3d2b1f,11px 2px #3d2b1f,12px 2px #3d2b1f,3px 3px #3d2b1f,4px 3px #3d2b1f,5px 3px #f0c08a,6px 3px #f0c08a,7px 3px #f0c08a,8px 3px #f0c08a,9px 3px #f0c08a,10px 3px #f0c08a,11px 3px #3d2b1f,12px 3px #3d2b1f,3px 4px #3d2b1f,4px 4px #f0c08a,5px 4px #f0c08a,6px 4px #f0c08a,7px 4px #f0c08a,8px 4px #f0c08a,9px 4px #f0c08a,10px 4px #f0c08a,11px 4px #f0c08a,12px 4px #3d2b1f,3px 5px #f0c08a,4px 5px #f0c08a,5px 5px #fff,6px 5px #2c2c2c,7px 5px #f0c08a,8px 5px #f0c08a,9px 5px #fff,10px 5px #2c2c2c,11px 5px #f0c08a,12px 5px #f0c08a,3px 6px #f0c08a,4px 6px #f0c08a,5px 6px #f0c08a,6px 6px #f0c08a,7px 6px #f0c08a,8px 6px #e0a870,9px 6px #f0c08a,10px 6px #f0c08a,11px 6px #f0c08a,12px 6px #f0c08a,4px 7px #f0c08a,5px 7px #f0c08a,6px 7px #f0c08a,7px 7px #f0c08a,8px 7px #f0c08a,9px 7px #f0c08a,10px 7px #f0c08a,11px 7px #f0c08a,4px 8px #f0c08a,5px 8px #f0c08a,6px 8px #f0c08a,7px 8px #c96b5e,8px 8px #c96b5e,9px 8px #c96b5e,10px 8px #f0c08a,11px 8px #f0c08a,5px 9px #f0c08a,6px 9px #f0c08a,7px 9px #f0c08a,8px 9px #f0c08a,9px 9px #f0c08a,10px 9px #f0c08a,5px 10px #f0c08a,6px 10px #f0c08a,7px 10px #4a90d9,8px 10px #4a90d9,9px 10px #f0c08a,10px 10px #f0c08a,3px 11px #4a90d9,4px 11px #4a90d9,5px 11px #4a90d9,6px 11px #4a90d9,7px 11px #4a90d9,8px 11px #4a90d9,9px 11px #4a90d9,10px 11px #4a90d9,11px 11px #4a90d9,12px 11px #4a90d9,2px 12px #4a90d9,3px 12px #4a90d9,4px 12px #4a90d9,5px 12px #4a90d9,6px 12px #4a90d9,7px 12px #fff,8px 12px #fff,9px 12px #4a90d9,10px 12px #4a90d9,11px 12px #4a90d9,12px 12px #4a90d9,13px 12px #4a90d9,2px 13px #4a90d9,3px 13px #4a90d9,4px 13px #f0c08a,5px 13px #4a90d9,6px 13px #4a90d9,7px 13px #4a90d9,8px 13px #4a90d9,9px 13px #4a90d9,10px 13px #4a90d9,11px 13px #f0c08a,12px 13px #4a90d9,13px 13px #4a90d9,4px 14px #3d5a80,5px 14px #3d5a80,6px 14px #3d5a80,7px 14px #3d5a80,8px 14px #3d5a80,9px 14px #3d5a80,10px 14px #3d5a80,11px 14px #3d5a80,3px 15px #2c2c2c,4px 15px #2c2c2c,5px 15px #2c2c2c,6px 15px #2c2c2c,9px 15px #2c2c2c,10px 15px #2c2c2c,11px 15px #2c2c2c,12px 15px #2c2c2c' },
+  { name:'PIXEL CAT', meta:'16×16 · 5 colors · CSS', blink:false, scale:6, shadows:'3px 0 #ff9f43,4px 0 #ff9f43,11px 0 #ff9f43,12px 0 #ff9f43,2px 1px #ff9f43,3px 1px #ffbe76,4px 1px #ff9f43,11px 1px #ff9f43,12px 1px #ffbe76,13px 1px #ff9f43,2px 2px #ff9f43,3px 2px #ffbe76,4px 2px #ffbe76,5px 2px #ff9f43,10px 2px #ff9f43,11px 2px #ffbe76,12px 2px #ffbe76,13px 2px #ff9f43,3px 3px #ff9f43,4px 3px #ff9f43,5px 3px #ff9f43,6px 3px #ff9f43,7px 3px #ff9f43,8px 3px #ff9f43,9px 3px #ff9f43,10px 3px #ff9f43,11px 3px #ff9f43,12px 3px #ff9f43,2px 4px #ff9f43,3px 4px #ffbe76,4px 4px #ffbe76,5px 4px #ffbe76,6px 4px #ffbe76,7px 4px #ffbe76,8px 4px #ffbe76,9px 4px #ffbe76,10px 4px #ffbe76,11px 4px #ffbe76,12px 4px #ffbe76,13px 4px #ff9f43,2px 5px #ff9f43,3px 5px #ffbe76,4px 5px #ffbe76,5px 5px #2c2c2c,6px 5px #ffbe76,7px 5px #ffbe76,8px 5px #ffbe76,9px 5px #ffbe76,10px 5px #2c2c2c,11px 5px #ffbe76,12px 5px #ffbe76,13px 5px #ff9f43,2px 6px #ff9f43,3px 6px #ffbe76,4px 6px #ffbe76,5px 6px #ffbe76,6px 6px #ffbe76,7px 6px #ffbe76,8px 6px #ffbe76,9px 6px #ffbe76,10px 6px #ffbe76,11px 6px #ffbe76,12px 6px #ffbe76,13px 6px #ff9f43,2px 7px #ff9f43,3px 7px #ffbe76,4px 7px #ffbe76,5px 7px #ffbe76,6px 7px #ffbe76,7px 7px #ff6b6b,8px 7px #ff6b6b,9px 7px #ffbe76,10px 7px #ffbe76,11px 7px #ffbe76,12px 7px #ffbe76,13px 7px #ff9f43,1px 8px #ff9f43,2px 8px #ff9f43,3px 8px #ffbe76,4px 8px #ffbe76,5px 8px #ffbe76,6px 8px #c96b5e,7px 8px #ffbe76,8px 8px #ffbe76,9px 8px #c96b5e,10px 8px #ffbe76,11px 8px #ffbe76,12px 8px #ffbe76,13px 8px #ff9f43,14px 8px #ff9f43,0px 9px #ff9f43,3px 9px #ff9f43,4px 9px #ffbe76,5px 9px #ffbe76,6px 9px #ffbe76,7px 9px #ffbe76,8px 9px #ffbe76,9px 9px #ffbe76,10px 9px #ffbe76,11px 9px #ffbe76,12px 9px #ff9f43,15px 9px #ff9f43,4px 10px #ff9f43,5px 10px #ffbe76,6px 10px #ffbe76,7px 10px #ffbe76,8px 10px #ffbe76,9px 10px #ffbe76,10px 10px #ffbe76,11px 10px #ff9f43,5px 11px #ff9f43,6px 11px #ffbe76,7px 11px #ffbe76,8px 11px #ffbe76,9px 11px #ffbe76,10px 11px #ff9f43,4px 12px #ff9f43,5px 12px #ffbe76,6px 12px #ffbe76,7px 12px #ffbe76,8px 12px #ffbe76,9px 12px #ffbe76,10px 12px #ffbe76,11px 12px #ff9f43,12px 12px #ff9f43,13px 11px #ff9f43,14px 10px #ff9f43,14px 9px #ff9f43,4px 13px #ff9f43,5px 13px #ffbe76,6px 13px #ffbe76,7px 13px #ffbe76,8px 13px #ffbe76,9px 13px #ffbe76,10px 13px #ffbe76,11px 13px #ff9f43,3px 14px #ff9f43,4px 14px #ff9f43,5px 14px #ff9f43,6px 14px #ff9f43,9px 14px #ff9f43,10px 14px #ff9f43,11px 14px #ff9f43,12px 14px #ff9f43' },
+  { name:'ROBOT', meta:'16×16 · 6 colors · CSS', blink:true, scale:6, shadows:'7px 0 #e94560,8px 0 #e94560,7px 1px #a0a0a0,8px 1px #a0a0a0,4px 2px #708090,5px 2px #a0a0a0,6px 2px #a0a0a0,7px 2px #a0a0a0,8px 2px #a0a0a0,9px 2px #a0a0a0,10px 2px #a0a0a0,11px 2px #708090,3px 3px #708090,4px 3px #a0a0a0,5px 3px #c0c0c0,6px 3px #c0c0c0,7px 3px #c0c0c0,8px 3px #c0c0c0,9px 3px #c0c0c0,10px 3px #c0c0c0,11px 3px #a0a0a0,12px 3px #708090,3px 4px #708090,4px 4px #c0c0c0,5px 4px #c0c0c0,6px 4px #c0c0c0,7px 4px #c0c0c0,8px 4px #c0c0c0,9px 4px #c0c0c0,10px 4px #c0c0c0,11px 4px #c0c0c0,12px 4px #708090,3px 5px #708090,4px 5px #c0c0c0,5px 5px #00ff88,6px 5px #00ff88,7px 5px #c0c0c0,8px 5px #c0c0c0,9px 5px #00ff88,10px 5px #00ff88,11px 5px #c0c0c0,12px 5px #708090,3px 6px #708090,4px 6px #c0c0c0,5px 6px #00ff88,6px 6px #00ff88,7px 6px #c0c0c0,8px 6px #c0c0c0,9px 6px #00ff88,10px 6px #00ff88,11px 6px #c0c0c0,12px 6px #708090,3px 7px #708090,4px 7px #c0c0c0,5px 7px #c0c0c0,6px 7px #c0c0c0,7px 7px #c0c0c0,8px 7px #c0c0c0,9px 7px #c0c0c0,10px 7px #c0c0c0,11px 7px #c0c0c0,12px 7px #708090,3px 8px #708090,4px 8px #c0c0c0,5px 8px #c0c0c0,6px 8px #505050,7px 8px #505050,8px 8px #505050,9px 8px #505050,10px 8px #c0c0c0,11px 8px #c0c0c0,12px 8px #708090,4px 9px #708090,5px 9px #708090,6px 9px #708090,7px 9px #708090,8px 9px #708090,9px 9px #708090,10px 9px #708090,11px 9px #708090,6px 10px #a0a0a0,7px 10px #a0a0a0,8px 10px #a0a0a0,9px 10px #a0a0a0,3px 11px #708090,4px 11px #a0a0a0,5px 11px #a0a0a0,6px 11px #a0a0a0,7px 11px #a0a0a0,8px 11px #a0a0a0,9px 11px #a0a0a0,10px 11px #a0a0a0,11px 11px #a0a0a0,12px 11px #708090,3px 12px #708090,4px 12px #a0a0a0,5px 12px #a0a0a0,6px 12px #a0a0a0,7px 12px #e94560,8px 12px #e94560,9px 12px #a0a0a0,10px 12px #a0a0a0,11px 12px #a0a0a0,12px 12px #708090,3px 13px #708090,4px 13px #a0a0a0,5px 13px #a0a0a0,6px 13px #a0a0a0,7px 13px #a0a0a0,8px 13px #a0a0a0,9px 13px #a0a0a0,10px 13px #a0a0a0,11px 13px #a0a0a0,12px 13px #708090,4px 14px #708090,5px 14px #708090,6px 14px #708090,7px 14px #708090,8px 14px #708090,9px 14px #708090,10px 14px #708090,11px 14px #708090,3px 15px #505050,4px 15px #505050,5px 15px #505050,6px 15px #505050,9px 15px #505050,10px 15px #505050,11px 15px #505050,12px 15px #505050' },
+];
+
+// ---- CHARACTERS ----
+const CHARS = [
+  { name:'WIZARD', w:24, h:24, p:{'H':'#2a1a4e','h':'#3c2a6e','P':'#6a3cbf','p':'#8a5cdf','S':'#f5d0a0','s':'#ddb080','E':'#0a0a0a','W':'#ffffff','G':'#ffd700','g':'#daa520','B':'#1a1a2e','R':'#e94560','D':'#151520','M':'#c96b5e','w':'#dce0e8'}, d:['..........HH............','.........HHHH...........',  '........HHHHHH..........','.......HHHHHHHH.........',  '......HHHhHhHHHH........','.....HHHHhhHHHHHH.......',  '....HHSSSSSSSSHHH.......','....HSSSSSSSSSHH........',  '....HSDSSSSDSSSH........','....HSESSSSESEH.........',  '....HSSSSsSSSS..........', '.....SSSMMMSS...........',  '......SSSSSS............','.....PPGwwGPP...........',  '....PPPwwwwPPP..........',  '...PPPPwwwwPPPP.........',  '..SPPPPPPPPPPPPs........','..SPPPPPPPPPPPPs........','...PPPPPPPPPPPP.........','...PPPPppPPPPP..........','...PPP..PPPP............','...PPP..PPP.............','....ss...ss.............','...BBB..BBB.............'] },
+  { name:'SWORDSMAN', w:16, h:24, p:{'.':'transparent','G':'#d4af37','H':'#0f0f1a','h':'#1a1a2e','i':'#2a2a45','S':'#f5d0a0','s':'#ddb080','D':'#151520','E':'#0a0a0a','M':'#c96b5e','B':'#1a3050','b':'#2a5a8a','w':'#dce0e8','v':'#b8bcc8','R':'#8b2020','r':'#c83030','T':'#e04050','A':'#c8ccd4','a':'#9ca0a8','K':'#b89830'}, d:['.......GG.......',  '......GhhG......','.....hhhhhh.....','.....hhiihh.....','....hhhhhhhh....','....hhSSSSSh....','....hSDSSDSh....','....hSESSEShh...','....hSSSsSShh...','.....SSMMSS.hh..','......SSSS...h..','......SwwS......','.....bwwwwb.....','....bBwwwwBb....','...bBBwwwwBBb...','..SBBBwwwwBBBS..','..SBBrrrrrBBSKA.','...BBBBBBBBB.aA.','...BBBbBBBBB.aA.','...BBBbBBBB..aA.','...BBB..BBB..aT.','...BBB..BBB.....','....SS..SS......','...DDD..DDD.....'] },
+  { name:'KNIGHT', w:32, h:32, p:{'M':'#708090','m':'#a0a0a0','L':'#c0c0c0','l':'#d8d8d8','S':'#f5d0a0','s':'#ddb080','E':'#0a0a0a','W':'#ffffff','B':'#3a6fbf','b':'#5a9fef','G':'#d4af37','g':'#b89830','R':'#8b2020','r':'#c83030','D':'#2c2c2c','H':'#3d2b1f','A':'#c8ccd4','a':'#9ca0a8'}, d:['................................','...........MmmmmmM.............','..........MmLLLLLmM............','.........MmLLLLLLLmM...........','.........MmLLLLLLLmM...........','........MmLlLLLLlLmM..........','........MMLLLLLLLLMM..........','........MmLLLLLLLmM...........','.........MMMMMMMMMM...........',  '..........mLLLLLLm............','.........MmLLLLLLmM...........','..........HSSSSSSSH...........','..........HSDSSDSH............','..........HSESSEHS............','..........HSSsSSSSH...........',  '...........SSMMSSH............','............SSSS..............','...........GBbbBG.............','..........BBBbbBBB............','.........BBBBbbBBBB..........','........SBBBBbbBBBBS..........','........SBBrrrrBBBSAA.........','.........BBBBBBBBBBAaA........','.........BBBbBBBBBBAaA........','.........BBBbBBBBB.AaA........','.........BBBbBBBB..AaA........','.........BBB..BBB..ArA........','.........BBB..BBB.............','..........SS..SS..............','  .........DDD..DDD.............', '.........DDD..DDD.............','................................'] },
+];
+
+// ---- SCENES ----
+const SCENE_CARDS = [
+  { name:'Swordsman', url:'swordsman.html', desc:'月夜剑客 — 古风角色配樱花、月光、剑光特效', size:'16×24', tags:[{t:'Animated',c:'pink'},{t:'Atmosphere',c:'cyan'},{t:'16×24',c:'gold'}], gradient:'linear-gradient(135deg, #070b1a, #131832)' },
+  { name:'Cyberpunk Girl', url:'cyberpunk.html', desc:'赛博朋克女孩 — 霓虹灯、雨夜、电子眼、闪烁招牌', size:'32×32', tags:[{t:'Neon',c:'pink'},{t:'Rain',c:'cyan'},{t:'32×32',c:'gold'}], gradient:'linear-gradient(135deg, #05050f, #0f0820)' },
+  { name:'Fire Dragon', url:'dragon.html', desc:'火龙 — 火焰粒子、熔岩裂缝、鳞片光泽、余烬飘散', size:'24×24', tags:[{t:'Particles',c:'pink'},{t:'Fire FX',c:'gold'},{t:'24×24',c:'green'}], gradient:'linear-gradient(135deg, #0a0008, #200815)' },
+];
+
+// ================================================================
+// RENDERERS
+// ================================================================
+
+function renderGrid(data, container, scale) {
+  const w = data.w || 8, h = data.d.length;
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const frame = document.createElement('div');
+  frame.className = 'frame';
+
+  const grid = document.createElement('div');
+  grid.className = 'pixel-grid';
+  grid.style.gridTemplateColumns = `repeat(${w}, ${scale}px)`;
+
+  for (const row of data.d) {
+    for (let x = 0; x < w; x++) {
+      const ch = row[x] || '.';
+      const px = document.createElement('div');
+      px.style.width = scale + 'px';
+      px.style.height = scale + 'px';
+      px.style.background = data.p[ch] || 'transparent';
+      grid.appendChild(px);
+    }
+  }
+
+  frame.appendChild(grid);
+  card.appendChild(frame);
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = data.name;
+  card.appendChild(label);
+
+  const meta = document.createElement('span');
+  meta.className = 'meta';
+  const colors = Object.keys(data.p).filter(k => k !== '.').length;
+  meta.textContent = `${w}×${h} · ${colors} colors · ${scale}x`;
+  card.appendChild(meta);
+
+  container.appendChild(card);
+  return grid;
+}
+
+function renderCSSAvatar(data, container) {
+  const card = document.createElement('div');
+  card.className = 'card';
+
+  const frame = document.createElement('div');
+  frame.className = 'frame';
+
+  const el = document.createElement('div');
+  el.className = 'pixel-art-css';
+  el.style.transform = `scale(${data.scale})`;
+  el.style.boxShadow = data.shadows;
+  if (data.blink) el.style.animation = 'blink 4s infinite';
+
+  frame.appendChild(el);
+  card.appendChild(frame);
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = data.name;
+  card.appendChild(label);
+
+  const meta = document.createElement('span');
+  meta.className = 'meta';
+  meta.textContent = data.meta;
+  card.appendChild(meta);
+
+  container.appendChild(card);
+}
+
+function renderSceneCards(container) {
+  SCENE_CARDS.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'scene-card';
+    card.onclick = () => window.open(s.url, '_blank');
+
+    card.innerHTML = `
+      <div class="scene-preview" style="background:${s.gradient}">
+        <span style="color:#333;font-size:40px;letter-spacing:4px">${s.size}</span>
+      </div>
+      <div class="scene-info">
+        <h3>${s.name}</h3>
+        <div class="desc">${s.desc}</div>
+        <div class="tags">
+          ${s.tags.map(t => `<span class="tag ${t.c}">${t.t}</span>`).join('')}
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// ================================================================
+// RENDER ALL SECTIONS
+// ================================================================
+
+// Icons
+let iconScale = 6;
+function renderIcons() {
+  const g = document.getElementById('icon-gallery');
+  g.innerHTML = '';
+  ICONS.forEach(icon => {
+    const card = document.createElement('div');
+    card.className = 'icon-card';
+    const grid = document.createElement('div');
+    grid.className = 'pixel-grid';
+    grid.style.gridTemplateColumns = `repeat(8, ${iconScale}px)`;
+    for (const row of icon.d) {
+      for (let x = 0; x < 8; x++) {
+        const ch = row[x] || '.';
+        const px = document.createElement('div');
+        px.style.width = iconScale + 'px';
+        px.style.height = iconScale + 'px';
+        px.style.background = icon.p[ch] || 'transparent';
+        grid.appendChild(px);
+      }
+    }
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = icon.name;
+    card.appendChild(grid);
+    card.appendChild(label);
+    g.appendChild(card);
+  });
+}
+renderIcons();
+
+document.querySelectorAll('.icon-scale').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.icon-scale').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    iconScale = parseInt(btn.dataset.s);
+    renderIcons();
+  });
+});
+
+// Sprites
+const spriteG = document.getElementById('sprite-gallery');
+SPRITES.forEach(s => renderGrid(s, spriteG, 6));
+
+// Avatars
+const avatarG = document.getElementById('avatar-gallery');
+AVATARS_CSS.forEach(a => renderCSSAvatar(a, avatarG));
+
+// Characters
+let charScale = 5;
+function renderChars() {
+  const g = document.getElementById('char-gallery');
+  g.innerHTML = '';
+  CHARS.forEach(c => renderGrid(c, g, charScale));
+}
+renderChars();
+
+document.querySelectorAll('.char-scale').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.char-scale').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    charScale = parseInt(btn.dataset.s);
+    renderChars();
+  });
+});
+
+// Scenes
+renderSceneCards(document.getElementById('scene-gallery'));
+
+// ================================================================
+// Navigation highlight on scroll
+// ================================================================
+const sections = document.querySelectorAll('.section');
+const navLinks = document.querySelectorAll('nav a');
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { threshold: 0.3 });
+
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelAI — Pixel Art Gallery</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: #0d0d1a;
+    font-family: 'Courier New', monospace;
+    color: #eee;
+    padding: 40px 20px 60px;
+  }
+
+  /* ========== Header ========== */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .header h1 {
+    font-size: 28px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #e94560;
+    text-shadow: 0 0 20px rgba(233, 69, 96, 0.4);
+    margin-bottom: 8px;
+  }
+
+  .header .subtitle {
+    font-size: 12px;
+    color: #555;
+    letter-spacing: 3px;
+  }
+
+  /* ========== Section ========== */
+  .section {
+    max-width: 1200px;
+    margin: 0 auto 56px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    color: #e94560;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .section-desc {
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 24px;
+    letter-spacing: 1px;
+  }
+
+  /* ========== Gallery Grid ========== */
+  .gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    justify-content: center;
+    align-items: flex-end;
+  }
+
+  .avatar-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .avatar-card .label {
+    font-size: 11px;
+    color: #777;
+    letter-spacing: 2px;
+  }
+
+  .avatar-card .meta {
+    font-size: 10px;
+    color: #444;
+    letter-spacing: 1px;
+  }
+
+  .avatar-frame {
+    background: #12162a;
+    border: 1px solid #1a2040;
+    border-radius: 10px;
+    padding: 24px;
+    box-shadow: 0 0 20px rgba(15, 52, 96, 0.3);
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+
+  .avatar-frame:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 30px rgba(233, 69, 96, 0.2);
+  }
+
+  /* ========== Pixel Grid (JS rendered) ========== */
+  .pixel-grid {
+    display: grid;
+    gap: 0;
+    image-rendering: pixelated;
+  }
+
+  /* ========== Pure CSS pixel-art base ========== */
+  .pixel-art-css {
+    width: 1px;
+    height: 1px;
+    transform-origin: top left;
+    image-rendering: pixelated;
+    background: transparent;
+  }
+
+  /* ========== Hover bounce ========== */
+  @keyframes idle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+
+  .avatar-frame:hover .pixel-grid,
+  .avatar-frame:hover .pixel-art-css {
+    animation: idle 0.6s ease-in-out infinite;
+  }
+
+  /* ========== Scale Controls ========== */
+  .controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .controls button {
+    background: #1a2040;
+    border: 1px solid #2a3060;
+    color: #888;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+
+  .controls button:hover {
+    border-color: #e94560;
+    color: #e94560;
+  }
+
+  .controls button.active {
+    background: #e94560;
+    border-color: #e94560;
+    color: #fff;
+  }
+
+  /* ========== Code Preview ========== */
+  .code-block {
+    max-width: 700px;
+    margin: 0 auto;
+    background: #12162a;
+    border: 1px solid #1a2040;
+    border-radius: 8px;
+    padding: 20px;
+    font-size: 12px;
+    color: #a0a0a0;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .code-block .kw { color: #e94560; }
+  .code-block .str { color: #00ff88; }
+  .code-block .cmt { color: #444; }
+  .code-block .num { color: #ffa500; }
+
+  /* ========== Scene Link ========== */
+  .scene-link {
+    display: block;
+    text-align: center;
+    margin-top: 48px;
+    color: #555;
+    text-decoration: none;
+    font-size: 13px;
+    letter-spacing: 2px;
+    transition: color 0.3s;
+  }
+
+  .scene-link:hover { color: #e94560; }
+
+  /* ========== Blink for robot ========== */
+  @keyframes blink {
+    0%, 90%, 100% { opacity: 1; }
+    95% { opacity: 0.2; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>PixelAI Gallery</h1>
+  <div class="subtitle">Pure-code pixel art &mdash; zero images, zero dependencies</div>
+</div>
+
+<!-- ============================================================
+     SECTION 1: Micro 8×8 Icons
+     ============================================================ -->
+<div class="section">
+  <div class="section-title">Micro 8&times;8 &mdash; Minimal</div>
+  <div class="section-desc">3-5 colors &middot; icon style &middot; static render</div>
+  <div id="gallery-micro" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 2: Mini 12×12 Sprites
+     ============================================================ -->
+<div class="section">
+  <div class="section-title">Mini 12&times;12 &mdash; Standard</div>
+  <div class="section-desc">5-8 colors &middot; sprite style &middot; grid render</div>
+  <div id="gallery-mini" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 3: Small 16×16 Avatars
+     ============================================================ -->
+<div class="section">
+  <div class="section-title">Small 16&times;16 &mdash; Standard</div>
+  <div class="section-desc">8-12 colors &middot; character style &middot; CSS box-shadow render</div>
+  <div id="gallery-small" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 4: Medium 24×24 Characters
+     ============================================================ -->
+<div class="section">
+  <div class="section-title">Medium 24&times;24 &mdash; Detailed</div>
+  <div class="section-desc">10-16 colors &middot; character style &middot; grid render</div>
+  <div id="gallery-medium" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     SECTION 5: Large 32×32 Characters
+     ============================================================ -->
+<div class="section">
+  <div class="section-title">Large 32&times;32 &mdash; Detailed</div>
+  <div class="section-desc">12-20 colors &middot; character style &middot; grid render &middot; adjustable scale</div>
+  <div class="controls" id="scale-controls"></div>
+  <div id="gallery-large" class="gallery"></div>
+</div>
+
+<!-- ============================================================
+     Code Data Format Preview
+     ============================================================ -->
+<div class="section">
+  <div class="section-title">Data Format</div>
+  <div class="section-desc">Each pixel art piece is a simple JS object &mdash; human-readable, AI-generatable</div>
+  <div class="code-block"><span class="kw">const</span> wizard = {
+  name: <span class="str">'Wizard'</span>,
+  width: <span class="num">24</span>, height: <span class="num">24</span>,
+  scale: <span class="num">6</span>,
+  palette: {
+    <span class="str">'.'</span>: <span class="str">'transparent'</span>,
+    <span class="str">'H'</span>: <span class="str">'#2a1a4e'</span>,  <span class="cmt">// hat</span>
+    <span class="str">'S'</span>: <span class="str">'#f5d0a0'</span>,  <span class="cmt">// skin</span>
+    <span class="str">'R'</span>: <span class="str">'#6a3cbf'</span>,  <span class="cmt">// robe</span>
+    <span class="str">'G'</span>: <span class="str">'#ffd700'</span>,  <span class="cmt">// gold</span>
+  },
+  pixels: [
+    <span class="str">'........HHHH............'</span>,
+    <span class="str">'......HHHHHHHH..........'</span>,
+    <span class="str">'....HHHHHHHHHHH.........'</span>,
+    <span class="cmt">// ... each char = 1 pixel</span>
+  ]
+};</div>
+</div>
+
+<div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:48px;">
+  <a href="swordsman.html" class="scene-link">Swordsman &mdash; Moonlit Scene (16&times;24) &rarr;</a>
+  <a href="cyberpunk.html" class="scene-link">Cyberpunk Girl &mdash; Neon Rain (32&times;32) &rarr;</a>
+  <a href="dragon.html" class="scene-link">Fire Dragon &mdash; Ember Scene (24&times;24) &rarr;</a>
+  <a href="icons.html" class="scene-link">Pixel Icons &mdash; 8&times;8 Collection &rarr;</a>
+</div>
+
+<script>
+// ================================================================
+// PixelAI — Multi-Size Gallery Data & Renderer
+// ================================================================
+
+// ---- MICRO 8×8 (Minimal: 3-5 colors) ----
+const MICRO = [
+  {
+    name: 'HEART', width: 8, height: 8, scale: 8,
+    palette: { 'R': '#e94560', 'P': '#ff6b8a' },
+    pixels: [
+      '........',
+      '.RR.RR..',
+      'RPPRRPPR',
+      'RPPPPPPR',
+      '.RPPPPPR',
+      '..RPPR..',
+      '...RR...',
+      '........',
+    ]
+  },
+  {
+    name: 'STAR', width: 8, height: 8, scale: 8,
+    palette: { 'Y': '#ffd700', 'G': '#ffaa00' },
+    pixels: [
+      '...YY...',
+      '...YY...',
+      '.YYYYYY.',
+      'YYGYYGYY',
+      '..YGGY..',
+      '.YYGGYY.',
+      '.YY..YY.',
+      'YY....YY',
+    ]
+  },
+  {
+    name: 'SKULL', width: 8, height: 8, scale: 8,
+    palette: { 'W': '#e0e0e0', 'B': '#2c2c2c', 'G': '#a0a0a0' },
+    pixels: [
+      '..WWWW..',
+      '.WWWWWW.',
+      'WBWWWBWW',
+      'WWWWWWWW',
+      'WWWGGWWW',
+      '.WGWWGW.',
+      '..WWWW..',
+      '........',
+    ]
+  },
+  {
+    name: 'SWORD', width: 8, height: 8, scale: 8,
+    palette: { 'A': '#c8ccd4', 'G': '#d4af37', 'D': '#708090' },
+    pixels: [
+      '......AA',
+      '.....AA.',
+      '....AA..',
+      '...AA...',
+      '..AA....',
+      '.GAAG...',
+      '..GG....',
+      '..DD....',
+    ]
+  },
+  {
+    name: 'POTION', width: 8, height: 8, scale: 8,
+    palette: { 'G': '#a0a0a0', 'R': '#e94560', 'P': '#ff6b8a', 'D': '#808080' },
+    pixels: [
+      '..GGGG..',
+      '...GG...',
+      '..GGGG..',
+      '.RRRRRR.',
+      '.RPPPPR.',
+      '.RPPPPR.',
+      '.RRRRRR.',
+      '..RRRR..',
+    ]
+  },
+  {
+    name: 'SHIELD', width: 8, height: 8, scale: 8,
+    palette: { 'B': '#3a6fbf', 'L': '#5a9fef', 'G': '#d4af37', 'D': '#2a4f8f' },
+    pixels: [
+      '.GBBBBG.',
+      'GBLLLLBG',
+      'BLLGGLLB',
+      'BLLGGLLB',
+      'BLLLLLLB',
+      '.BLLLLB.',
+      '..BDDB..',
+      '...BB...',
+    ]
+  },
+];
+
+// ---- MINI 12×12 (Standard: 5-8 colors) ----
+const MINI = [
+  {
+    name: 'SKULL', width: 12, height: 12, scale: 6,
+    palette: {
+      'W': '#e0e0e0', 'G': '#a0a0a0', 'D': '#606060',
+      'B': '#2c2c2c', 'R': '#e94560',
+    },
+    pixels: [
+      '....WWWW....',
+      '..WWWWWWWW..',
+      '.WWWWWWWWWW.',
+      '.WWWWWWWWWW.',
+      'WWBWWWWWBWWW',
+      'WWBWWWWWBWWW',
+      'WWWWWDDWWWWW',
+      '.WWWWWWWWWW.',
+      '.WWRWRRWRWW.',
+      '..WRWRRWRW..',
+      '...WWWWWW...',
+      '....WWWW....',
+    ]
+  },
+  {
+    name: 'GHOST', width: 12, height: 12, scale: 6,
+    palette: {
+      'W': '#e8e8e8', 'L': '#f5f5f5', 'G': '#c0c0c0',
+      'B': '#2c2c2c', 'P': '#7c5cbf',
+    },
+    pixels: [
+      '....WWWW....',
+      '..WWWWWWWW..',
+      '.WWWWWWWWWW.',
+      '.WLWWWWLWWW.',
+      '.WBWWWWBWWW.',
+      'WWWWWWWWWWWW',
+      'WWWWWGWWWWWW',
+      'WWWWGGWWWWWW',
+      'WWWWWWWWWWWW',
+      'WWWWWWWWWWWW',
+      'WW.WW.WW.WW.',
+      '.W..W..W..W.',
+    ]
+  },
+  {
+    name: 'ALIEN', width: 12, height: 12, scale: 6,
+    palette: {
+      'G': '#00ff88', 'D': '#00cc6a', 'K': '#009950',
+      'B': '#2c2c2c', 'W': '#ffffff',
+    },
+    pixels: [
+      '....GGGG....',
+      '..GGGGGGGG..',
+      '.GGGGGGGGGG.',
+      'GDDGGGGGGDDG',
+      'GBWGGGGGGWBG',
+      'GGGGGGGGGGGG',
+      'GGGGGDDGGGGG',
+      '.GGGGGGGGGG.',
+      '..GGGKKGGG..',
+      '...KGGGK....',
+      '..KK..KK....',
+      '.KK....KK...',
+    ]
+  },
+  {
+    name: 'SLIME', width: 12, height: 12, scale: 6,
+    palette: {
+      'G': '#4ade80', 'L': '#86efac', 'D': '#22c55e',
+      'K': '#16a34a', 'W': '#ffffff', 'B': '#1a1a2e',
+    },
+    pixels: [
+      '............',
+      '....GGGG....',
+      '..GGGGGGGG..',
+      '.GGLGGGGLGG.',
+      '.GGGGGGGGGG.',
+      'GGWBGGWBGGGG',
+      'GGGGGGGGGGGG',
+      'GGGGGDDGGGGG',
+      '.GGGGGGGGGG.',
+      '.GDDGGGGDDG.',
+      '..KKKKKKKK..',
+      '............',
+    ]
+  },
+];
+
+// ---- SMALL 16×16 via CSS box-shadow ----
+const SMALL_CSS = [
+  {
+    name: 'COOL GUY',
+    meta: '16×16 · 7 colors',
+    shadows: `
+      5px 0 #3d2b1f, 6px 0 #3d2b1f, 7px 0 #3d2b1f, 8px 0 #3d2b1f, 9px 0 #3d2b1f, 10px 0 #3d2b1f,
+      4px 1px #3d2b1f, 5px 1px #3d2b1f, 6px 1px #3d2b1f, 7px 1px #3d2b1f, 8px 1px #3d2b1f, 9px 1px #3d2b1f, 10px 1px #3d2b1f, 11px 1px #3d2b1f,
+      3px 2px #3d2b1f, 4px 2px #3d2b1f, 5px 2px #3d2b1f, 6px 2px #3d2b1f, 7px 2px #3d2b1f, 8px 2px #3d2b1f, 9px 2px #3d2b1f, 10px 2px #3d2b1f, 11px 2px #3d2b1f, 12px 2px #3d2b1f,
+      3px 3px #3d2b1f, 4px 3px #3d2b1f, 5px 3px #f0c08a, 6px 3px #f0c08a, 7px 3px #f0c08a, 8px 3px #f0c08a, 9px 3px #f0c08a, 10px 3px #f0c08a, 11px 3px #3d2b1f, 12px 3px #3d2b1f,
+      3px 4px #3d2b1f, 4px 4px #f0c08a, 5px 4px #f0c08a, 6px 4px #f0c08a, 7px 4px #f0c08a, 8px 4px #f0c08a, 9px 4px #f0c08a, 10px 4px #f0c08a, 11px 4px #f0c08a, 12px 4px #3d2b1f,
+      3px 5px #f0c08a, 4px 5px #f0c08a, 5px 5px #fff, 6px 5px #2c2c2c, 7px 5px #f0c08a, 8px 5px #f0c08a, 9px 5px #fff, 10px 5px #2c2c2c, 11px 5px #f0c08a, 12px 5px #f0c08a,
+      3px 6px #f0c08a, 4px 6px #f0c08a, 5px 6px #f0c08a, 6px 6px #f0c08a, 7px 6px #f0c08a, 8px 6px #e0a870, 9px 6px #f0c08a, 10px 6px #f0c08a, 11px 6px #f0c08a, 12px 6px #f0c08a,
+      4px 7px #f0c08a, 5px 7px #f0c08a, 6px 7px #f0c08a, 7px 7px #f0c08a, 8px 7px #f0c08a, 9px 7px #f0c08a, 10px 7px #f0c08a, 11px 7px #f0c08a,
+      4px 8px #f0c08a, 5px 8px #f0c08a, 6px 8px #f0c08a, 7px 8px #c96b5e, 8px 8px #c96b5e, 9px 8px #c96b5e, 10px 8px #f0c08a, 11px 8px #f0c08a,
+      5px 9px #f0c08a, 6px 9px #f0c08a, 7px 9px #f0c08a, 8px 9px #f0c08a, 9px 9px #f0c08a, 10px 9px #f0c08a,
+      5px 10px #f0c08a, 6px 10px #f0c08a, 7px 10px #4a90d9, 8px 10px #4a90d9, 9px 10px #f0c08a, 10px 10px #f0c08a,
+      3px 11px #4a90d9, 4px 11px #4a90d9, 5px 11px #4a90d9, 6px 11px #4a90d9, 7px 11px #4a90d9, 8px 11px #4a90d9, 9px 11px #4a90d9, 10px 11px #4a90d9, 11px 11px #4a90d9, 12px 11px #4a90d9,
+      2px 12px #4a90d9, 3px 12px #4a90d9, 4px 12px #4a90d9, 5px 12px #4a90d9, 6px 12px #4a90d9, 7px 12px #fff, 8px 12px #fff, 9px 12px #4a90d9, 10px 12px #4a90d9, 11px 12px #4a90d9, 12px 12px #4a90d9, 13px 12px #4a90d9,
+      2px 13px #4a90d9, 3px 13px #4a90d9, 4px 13px #f0c08a, 5px 13px #4a90d9, 6px 13px #4a90d9, 7px 13px #4a90d9, 8px 13px #4a90d9, 9px 13px #4a90d9, 10px 13px #4a90d9, 11px 13px #f0c08a, 12px 13px #4a90d9, 13px 13px #4a90d9,
+      4px 14px #3d5a80, 5px 14px #3d5a80, 6px 14px #3d5a80, 7px 14px #3d5a80, 8px 14px #3d5a80, 9px 14px #3d5a80, 10px 14px #3d5a80, 11px 14px #3d5a80,
+      3px 15px #2c2c2c, 4px 15px #2c2c2c, 5px 15px #2c2c2c, 6px 15px #2c2c2c, 9px 15px #2c2c2c, 10px 15px #2c2c2c, 11px 15px #2c2c2c, 12px 15px #2c2c2c
+    `,
+    scale: 6,
+  },
+  {
+    name: 'PIXEL CAT',
+    meta: '16×16 · 5 colors',
+    shadows: `
+      3px 0 #ff9f43, 4px 0 #ff9f43, 11px 0 #ff9f43, 12px 0 #ff9f43,
+      2px 1px #ff9f43, 3px 1px #ffbe76, 4px 1px #ff9f43, 11px 1px #ff9f43, 12px 1px #ffbe76, 13px 1px #ff9f43,
+      2px 2px #ff9f43, 3px 2px #ffbe76, 4px 2px #ffbe76, 5px 2px #ff9f43, 10px 2px #ff9f43, 11px 2px #ffbe76, 12px 2px #ffbe76, 13px 2px #ff9f43,
+      3px 3px #ff9f43, 4px 3px #ff9f43, 5px 3px #ff9f43, 6px 3px #ff9f43, 7px 3px #ff9f43, 8px 3px #ff9f43, 9px 3px #ff9f43, 10px 3px #ff9f43, 11px 3px #ff9f43, 12px 3px #ff9f43,
+      2px 4px #ff9f43, 3px 4px #ffbe76, 4px 4px #ffbe76, 5px 4px #ffbe76, 6px 4px #ffbe76, 7px 4px #ffbe76, 8px 4px #ffbe76, 9px 4px #ffbe76, 10px 4px #ffbe76, 11px 4px #ffbe76, 12px 4px #ffbe76, 13px 4px #ff9f43,
+      2px 5px #ff9f43, 3px 5px #ffbe76, 4px 5px #ffbe76, 5px 5px #2c2c2c, 6px 5px #ffbe76, 7px 5px #ffbe76, 8px 5px #ffbe76, 9px 5px #ffbe76, 10px 5px #2c2c2c, 11px 5px #ffbe76, 12px 5px #ffbe76, 13px 5px #ff9f43,
+      2px 6px #ff9f43, 3px 6px #ffbe76, 4px 6px #ffbe76, 5px 6px #ffbe76, 6px 6px #ffbe76, 7px 6px #ffbe76, 8px 6px #ffbe76, 9px 6px #ffbe76, 10px 6px #ffbe76, 11px 6px #ffbe76, 12px 6px #ffbe76, 13px 6px #ff9f43,
+      2px 7px #ff9f43, 3px 7px #ffbe76, 4px 7px #ffbe76, 5px 7px #ffbe76, 6px 7px #ffbe76, 7px 7px #ff6b6b, 8px 7px #ff6b6b, 9px 7px #ffbe76, 10px 7px #ffbe76, 11px 7px #ffbe76, 12px 7px #ffbe76, 13px 7px #ff9f43,
+      1px 8px #ff9f43, 2px 8px #ff9f43, 3px 8px #ffbe76, 4px 8px #ffbe76, 5px 8px #ffbe76, 6px 8px #c96b5e, 7px 8px #ffbe76, 8px 8px #ffbe76, 9px 8px #c96b5e, 10px 8px #ffbe76, 11px 8px #ffbe76, 12px 8px #ffbe76, 13px 8px #ff9f43, 14px 8px #ff9f43,
+      0px 9px #ff9f43, 3px 9px #ff9f43, 4px 9px #ffbe76, 5px 9px #ffbe76, 6px 9px #ffbe76, 7px 9px #ffbe76, 8px 9px #ffbe76, 9px 9px #ffbe76, 10px 9px #ffbe76, 11px 9px #ffbe76, 12px 9px #ff9f43, 15px 9px #ff9f43,
+      4px 10px #ff9f43, 5px 10px #ffbe76, 6px 10px #ffbe76, 7px 10px #ffbe76, 8px 10px #ffbe76, 9px 10px #ffbe76, 10px 10px #ffbe76, 11px 10px #ff9f43,
+      5px 11px #ff9f43, 6px 11px #ffbe76, 7px 11px #ffbe76, 8px 11px #ffbe76, 9px 11px #ffbe76, 10px 11px #ff9f43,
+      4px 12px #ff9f43, 5px 12px #ffbe76, 6px 12px #ffbe76, 7px 12px #ffbe76, 8px 12px #ffbe76, 9px 12px #ffbe76, 10px 12px #ffbe76, 11px 12px #ff9f43, 12px 12px #ff9f43, 13px 11px #ff9f43, 14px 10px #ff9f43, 14px 9px #ff9f43,
+      4px 13px #ff9f43, 5px 13px #ffbe76, 6px 13px #ffbe76, 7px 13px #ffbe76, 8px 13px #ffbe76, 9px 13px #ffbe76, 10px 13px #ffbe76, 11px 13px #ff9f43,
+      3px 14px #ff9f43, 4px 14px #ff9f43, 5px 14px #ff9f43, 6px 14px #ff9f43, 9px 14px #ff9f43, 10px 14px #ff9f43, 11px 14px #ff9f43, 12px 14px #ff9f43
+    `,
+    scale: 6,
+  },
+  {
+    name: 'ROBOT',
+    meta: '16×16 · 6 colors',
+    shadows: `
+      7px 0 #e94560, 8px 0 #e94560,
+      7px 1px #a0a0a0, 8px 1px #a0a0a0,
+      4px 2px #708090, 5px 2px #a0a0a0, 6px 2px #a0a0a0, 7px 2px #a0a0a0, 8px 2px #a0a0a0, 9px 2px #a0a0a0, 10px 2px #a0a0a0, 11px 2px #708090,
+      3px 3px #708090, 4px 3px #a0a0a0, 5px 3px #c0c0c0, 6px 3px #c0c0c0, 7px 3px #c0c0c0, 8px 3px #c0c0c0, 9px 3px #c0c0c0, 10px 3px #c0c0c0, 11px 3px #a0a0a0, 12px 3px #708090,
+      3px 4px #708090, 4px 4px #c0c0c0, 5px 4px #c0c0c0, 6px 4px #c0c0c0, 7px 4px #c0c0c0, 8px 4px #c0c0c0, 9px 4px #c0c0c0, 10px 4px #c0c0c0, 11px 4px #c0c0c0, 12px 4px #708090,
+      3px 5px #708090, 4px 5px #c0c0c0, 5px 5px #00ff88, 6px 5px #00ff88, 7px 5px #c0c0c0, 8px 5px #c0c0c0, 9px 5px #00ff88, 10px 5px #00ff88, 11px 5px #c0c0c0, 12px 5px #708090,
+      3px 6px #708090, 4px 6px #c0c0c0, 5px 6px #00ff88, 6px 6px #00ff88, 7px 6px #c0c0c0, 8px 6px #c0c0c0, 9px 6px #00ff88, 10px 6px #00ff88, 11px 6px #c0c0c0, 12px 6px #708090,
+      3px 7px #708090, 4px 7px #c0c0c0, 5px 7px #c0c0c0, 6px 7px #c0c0c0, 7px 7px #c0c0c0, 8px 7px #c0c0c0, 9px 7px #c0c0c0, 10px 7px #c0c0c0, 11px 7px #c0c0c0, 12px 7px #708090,
+      3px 8px #708090, 4px 8px #c0c0c0, 5px 8px #c0c0c0, 6px 8px #505050, 7px 8px #505050, 8px 8px #505050, 9px 8px #505050, 10px 8px #c0c0c0, 11px 8px #c0c0c0, 12px 8px #708090,
+      4px 9px #708090, 5px 9px #708090, 6px 9px #708090, 7px 9px #708090, 8px 9px #708090, 9px 9px #708090, 10px 9px #708090, 11px 9px #708090,
+      6px 10px #a0a0a0, 7px 10px #a0a0a0, 8px 10px #a0a0a0, 9px 10px #a0a0a0,
+      3px 11px #708090, 4px 11px #a0a0a0, 5px 11px #a0a0a0, 6px 11px #a0a0a0, 7px 11px #a0a0a0, 8px 11px #a0a0a0, 9px 11px #a0a0a0, 10px 11px #a0a0a0, 11px 11px #a0a0a0, 12px 11px #708090,
+      3px 12px #708090, 4px 12px #a0a0a0, 5px 12px #a0a0a0, 6px 12px #a0a0a0, 7px 12px #e94560, 8px 12px #e94560, 9px 12px #a0a0a0, 10px 12px #a0a0a0, 11px 12px #a0a0a0, 12px 12px #708090,
+      3px 13px #708090, 4px 13px #a0a0a0, 5px 13px #a0a0a0, 6px 13px #a0a0a0, 7px 13px #a0a0a0, 8px 13px #a0a0a0, 9px 13px #a0a0a0, 10px 13px #a0a0a0, 11px 13px #a0a0a0, 12px 13px #708090,
+      4px 14px #708090, 5px 14px #708090, 6px 14px #708090, 7px 14px #708090, 8px 14px #708090, 9px 14px #708090, 10px 14px #708090, 11px 14px #708090,
+      3px 15px #505050, 4px 15px #505050, 5px 15px #505050, 6px 15px #505050, 9px 15px #505050, 10px 15px #505050, 11px 15px #505050, 12px 15px #505050
+    `,
+    scale: 6,
+    blink: true,
+  },
+];
+
+// ---- MEDIUM 24×24 (Detailed: 10-16 colors) ----
+const MEDIUM = [
+  {
+    name: 'WIZARD', width: 24, height: 24, scale: 5,
+    palette: {
+      'H': '#2a1a4e', 'h': '#3c2a6e', 'P': '#6a3cbf', 'p': '#8a5cdf',
+      'S': '#f5d0a0', 's': '#ddb080', 'E': '#0a0a0a', 'W': '#ffffff',
+      'G': '#ffd700', 'g': '#daa520', 'B': '#1a1a2e', 'R': '#e94560',
+    },
+    pixels: [
+      '..........HH............',
+      '.........HHHH...........',
+      '........HHHHHH..........',
+      '.......HHHHHHHH.........',
+      '......HHHhHhHHHH........',
+      '.....HHHHhhHHHHHH.......',
+      '....HHSSSSSSSSHHH.......',
+      '....HSSSSSSSSSHH........',
+      '....HSDSSSSDSSSH........',
+      '....HSESSSSESEH.........',
+      '....HSSSSsSSSS..........',
+      '.....SSSMMMSS...........',
+      '......SSSSSS............',
+      '.....PPGwwGPP...........',
+      '....PPPwwwwPPP..........',
+      '...PPPPwwwwPPPP.........',
+      '..SPPPPPPPPPPPPs........',
+      '..SPPPPPPPPPPPPs........',
+      '...PPPPPPPPPPPP.........',
+      '...PPPPppPPPPP..........',
+      '...PPP..PPPP............',
+      '...PPP..PPP.............',
+      '....ss...ss.............',
+      '...BBB..BBB.............',
+    ]
+  },
+];
+
+// ---- LARGE 32×32 (Detailed: 12-20 colors) ----
+const LARGE = [
+  {
+    name: 'KNIGHT', width: 32, height: 32, scale: 4,
+    palette: {
+      'M': '#708090', 'm': '#a0a0a0', 'L': '#c0c0c0', 'l': '#d8d8d8',
+      'S': '#f5d0a0', 's': '#ddb080', 'E': '#0a0a0a', 'W': '#ffffff',
+      'B': '#3a6fbf', 'b': '#5a9fef', 'G': '#d4af37', 'g': '#b89830',
+      'R': '#8b2020', 'r': '#c83030', 'D': '#2c2c2c', 'H': '#3d2b1f',
+      'A': '#c8ccd4', 'a': '#9ca0a8',
+    },
+    pixels: [
+      '................................',
+      '...........MmmmmmM.............',
+      '..........MmLLLLLmM............',
+      '.........MmLLLLLLLmM...........',
+      '.........MmLLLLLLLmM...........',
+      '........MmLlLLLLlLmM..........',
+      '........MMLLLLLLLLMM..........',
+      '........MmLLLLLLLmM...........',
+      '.........MMMMMMMMMM...........',
+      '..........mLLLLLLm............',
+      '.........MmLLLLLLmM...........',
+      '..........HSSSSSSSH...........',
+      '..........HSDSSDSH............',
+      '..........HSESSEHS............',
+      '..........HSSsSSSSH...........',
+      '...........SSMMSSH............',
+      '............SSSS..............',
+      '...........GBbbBG.............',
+      '..........BBBbbBBB............',
+      '.........BBBBbbBBBB...........',
+      '........SBBBBbbBBBBS..........',
+      '........SBBrrrrBBBSAA.........',
+      '.........BBBBBBBBBBAaA........',
+      '.........BBBbBBBBBBAaA........',
+      '.........BBBbBBBBB.AaA........',
+      '.........BBBbBBBB..AaA........',
+      '.........BBB..BBB..ArA........',
+      '.........BBB..BBB.............',
+      '..........SS..SS..............',
+      '.........DDD..DDD.............',
+      '.........DDD..DDD.............',
+      '................................',
+    ]
+  },
+];
+
+
+// ================================================================
+// Renderer: Grid-based (data-driven)
+// ================================================================
+function renderGrid(data, container, overrideScale) {
+  const scale = overrideScale || data.scale || 6;
+  const card = document.createElement('div');
+  card.className = 'avatar-card';
+
+  const frame = document.createElement('div');
+  frame.className = 'avatar-frame';
+
+  const grid = document.createElement('div');
+  grid.className = 'pixel-grid';
+  grid.style.gridTemplateColumns = `repeat(${data.width}, ${scale}px)`;
+
+  for (const row of data.pixels) {
+    for (let x = 0; x < data.width; x++) {
+      const ch = row[x] || '.';
+      const px = document.createElement('div');
+      px.style.width = scale + 'px';
+      px.style.height = scale + 'px';
+      px.style.background = data.palette[ch] || 'transparent';
+      grid.appendChild(px);
+    }
+  }
+
+  frame.appendChild(grid);
+  card.appendChild(frame);
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = data.name;
+  card.appendChild(label);
+
+  if (data.meta) {
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = data.meta;
+    card.appendChild(meta);
+  } else {
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = `${data.width}×${data.height} · ${Object.keys(data.palette).filter(k => k !== '.').length} colors · ${scale}x`;
+    card.appendChild(meta);
+  }
+
+  container.appendChild(card);
+  return { card, grid };
+}
+
+// ================================================================
+// Renderer: CSS box-shadow (pure CSS)
+// ================================================================
+function renderCSS(data, container) {
+  const card = document.createElement('div');
+  card.className = 'avatar-card';
+
+  const frame = document.createElement('div');
+  frame.className = 'avatar-frame';
+
+  const el = document.createElement('div');
+  el.className = 'pixel-art-css';
+  el.style.transform = `scale(${data.scale})`;
+  el.style.boxShadow = data.shadows;
+
+  if (data.blink) {
+    el.style.animation = 'blink 4s infinite';
+  }
+
+  frame.appendChild(el);
+  card.appendChild(frame);
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = data.name;
+  card.appendChild(label);
+
+  const meta = document.createElement('span');
+  meta.className = 'meta';
+  meta.textContent = data.meta || `16×16 · ${data.scale}x`;
+  card.appendChild(meta);
+
+  container.appendChild(card);
+}
+
+// ================================================================
+// Render all galleries
+// ================================================================
+
+// Micro 8×8
+const microContainer = document.getElementById('gallery-micro');
+MICRO.forEach(d => renderGrid(d, microContainer));
+
+// Mini 12×12
+const miniContainer = document.getElementById('gallery-mini');
+MINI.forEach(d => renderGrid(d, miniContainer));
+
+// Small 16×16 (CSS)
+const smallContainer = document.getElementById('gallery-small');
+SMALL_CSS.forEach(d => renderCSS(d, smallContainer));
+
+// Medium 24×24
+const mediumContainer = document.getElementById('gallery-medium');
+MEDIUM.forEach(d => renderGrid(d, mediumContainer));
+
+// Large 32×32 with scale controls
+const largeContainer = document.getElementById('gallery-large');
+const scaleControls = document.getElementById('scale-controls');
+let currentLargeScale = 4;
+
+const scales = [2, 3, 4, 5, 6, 8];
+scales.forEach(s => {
+  const btn = document.createElement('button');
+  btn.textContent = s + 'x';
+  if (s === currentLargeScale) btn.classList.add('active');
+  btn.addEventListener('click', () => {
+    currentLargeScale = s;
+    scaleControls.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    largeContainer.innerHTML = '';
+    LARGE.forEach(d => renderGrid(d, largeContainer, s));
+  });
+  scaleControls.appendChild(btn);
+});
+
+LARGE.forEach(d => renderGrid(d, largeContainer));
+</script>
+
+</body>
+</html>

@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixelAI — Landscape Generator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 100vw; height: 100vh; overflow: hidden;
+    background: #08080f;
+    font-family: 'Courier New', monospace;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid #1a1a2e;
+    border-radius: 4px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  }
+
+  /* ========== Controls ========== */
+  .controls {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; gap: 8px; padding: 12px 16px;
+    background: rgba(8,8,15,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #1a1a2e;
+    z-index: 100;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .ctrl-group {
+    display: flex; gap: 4px; align-items: center;
+  }
+
+  .ctrl-group .lbl {
+    font-size: 10px; color: #555; letter-spacing: 1px;
+    margin-right: 4px; text-transform: uppercase;
+  }
+
+  .controls button {
+    background: #12162a;
+    border: 1px solid #1e2240;
+    color: #777;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  .controls button:hover { border-color: #e94560; color: #e94560; }
+  .controls button.active { background: #e94560; border-color: #e94560; color: #fff; }
+
+  .sep {
+    width: 1px; height: 20px; background: #1e2240; margin: 0 4px;
+  }
+
+  .btn-regen {
+    background: #1a3050 !important;
+    border-color: #2a5a8a !important;
+    color: #5a9fef !important;
+  }
+  .btn-regen:hover {
+    background: #2a5a8a !important;
+    color: #fff !important;
+  }
+
+  /* ========== Info ========== */
+  .info {
+    position: fixed;
+    bottom: 12px; left: 16px;
+    font-size: 10px; color: #333;
+    letter-spacing: 1px;
+    z-index: 100;
+  }
+
+  .back-link {
+    position: fixed; bottom: 12px; right: 16px;
+    color: #333; text-decoration: none;
+    font-size: 11px; letter-spacing: 1px;
+    z-index: 100; transition: color 0.3s;
+  }
+  .back-link:hover { color: #e94560; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <span class="lbl">Scene</span>
+    <button class="scene-btn active" data-scene="mountain-sunset">Mountain Sunset</button>
+    <button class="scene-btn" data-scene="starry-lake">Starry Lake</button>
+    <button class="scene-btn" data-scene="sakura-hills">Sakura Hills</button>
+    <button class="scene-btn" data-scene="neon-city">Neon City</button>
+    <button class="scene-btn" data-scene="desert-dusk">Desert Dusk</button>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <span class="lbl">Size</span>
+    <button class="size-btn" data-w="96" data-h="64">96×64</button>
+    <button class="size-btn active" data-w="128" data-h="96">128×96</button>
+    <button class="size-btn" data-w="192" data-h="128">192×128</button>
+    <button class="size-btn" data-w="130" data-h="230">Phone</button>
+    <button class="size-btn" data-w="256" data-h="144">HD</button>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <span class="lbl">Scale</span>
+    <button class="scale-btn" data-s="2">2x</button>
+    <button class="scale-btn" data-s="3">3x</button>
+    <button class="scale-btn active" data-s="4">4x</button>
+    <button class="scale-btn" data-s="6">6x</button>
+  </div>
+  <div class="sep"></div>
+  <button class="btn-regen" id="btn-regen">Regenerate</button>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div class="info" id="info">128×96 · 4x · mountain-sunset</div>
+<a href="showcase.html" class="back-link">&larr; Showcase</a>
+
+<script>
+// ================================================================
+//  PixelAI Landscape Generator
+//  Procedural pixel art using FBM noise + ordered dithering
+// ================================================================
+
+// ======== MATH UTILITIES ========
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+function smoothstep(t) { return t * t * (3 - 2 * t); }
+
+// ======== VALUE NOISE (hash-based) ========
+let SEED = Math.random() * 99999 | 0;
+
+function hash2D(x, y) {
+  let n = (x + SEED) * 374761393 + y * 668265263;
+  n = ((n ^ (n >> 13)) * 1274126177) | 0;
+  return ((n ^ (n >> 16)) >>> 0) / 4294967296;
+}
+
+function valueNoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y);
+  const fx = smoothstep(x - ix), fy = smoothstep(y - iy);
+  return lerp(
+    lerp(hash2D(ix, iy),   hash2D(ix+1, iy),   fx),
+    lerp(hash2D(ix, iy+1), hash2D(ix+1, iy+1), fx),
+    fy
+  );
+}
+
+// Fractal Brownian Motion — layered noise for natural terrain
+function fbm(x, y, octaves = 5, lacunarity = 2.0, gain = 0.5) {
+  let val = 0, amp = 1, freq = 1, total = 0;
+  for (let i = 0; i < octaves; i++) {
+    val += valueNoise(x * freq, y * freq) * amp;
+    total += amp;
+    amp *= gain;
+    freq *= lacunarity;
+  }
+  return val / total;
+}
+
+// Ridge noise — abs inverted for mountain ridges
+function ridgeNoise(x, y, octaves = 4) {
+  let val = 0, amp = 1, freq = 1, total = 0;
+  for (let i = 0; i < octaves; i++) {
+    let n = valueNoise(x * freq, y * freq);
+    n = 1.0 - Math.abs(n * 2 - 1); // sharp ridges
+    val += n * amp;
+    total += amp;
+    amp *= 0.5;
+    freq *= 2.1;
+  }
+  return val / total;
+}
+
+// ======== ORDERED DITHERING (Bayer 4×4) ========
+const BAYER = [
+  [ 0, 8, 2,10],
+  [12, 4,14, 6],
+  [ 3,11, 1, 9],
+  [15, 7,13, 5],
+];
+
+function ditherTest(x, y, ratio) {
+  return ratio > BAYER[y & 3][x & 3] / 16;
+}
+
+// ======== COLOR UTILITIES ========
+function hex(h) {
+  return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+}
+
+function lerpColor(c1, c2, t) {
+  return [
+    Math.round(lerp(c1[0], c2[0], t)),
+    Math.round(lerp(c1[1], c2[1], t)),
+    Math.round(lerp(c1[2], c2[2], t)),
+  ];
+}
+
+function ditherColor(x, y, c1, c2, ratio) {
+  return ditherTest(x, y, clamp(ratio, 0, 1)) ? c2 : c1;
+}
+
+// ======== PIXEL BUFFER ========
+class PixelBuffer {
+  constructor(w, h) {
+    this.w = w;
+    this.h = h;
+    this.buf = new Uint8ClampedArray(w * h * 4);
+  }
+
+  clear() { this.buf.fill(0); }
+
+  set(x, y, r, g, b, a) {
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h) return;
+    const i = (y * this.w + x) << 2;
+    this.buf[i] = r; this.buf[i|1] = g; this.buf[i|2] = b; this.buf[i|3] = a || 255;
+  }
+
+  setC(x, y, c) { this.set(x, y, c[0], c[1], c[2]); }
+
+  get(x, y) {
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h) return [0,0,0,0];
+    const i = (y * this.w + x) << 2;
+    return [this.buf[i], this.buf[i|1], this.buf[i|2], this.buf[i|3]];
+  }
+
+  // Set pixel with alpha blending
+  blend(x, y, c, alpha) {
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h) return;
+    const bg = this.get(x, y);
+    const a = alpha / 255;
+    this.set(x, y,
+      Math.round(bg[0] * (1-a) + c[0] * a),
+      Math.round(bg[1] * (1-a) + c[1] * a),
+      Math.round(bg[2] * (1-a) + c[2] * a),
+    );
+  }
+}
+
+// ======== SCENE PALETTES ========
+const PALETTES = {
+  'mountain-sunset': {
+    sky:       [hex('#1a0535'), hex('#4a0a5c'), hex('#b81560'), hex('#e85420'), hex('#f0a030'), hex('#ffd080')],
+    sunColor:  hex('#ffe8a0'),
+    sunGlow:   hex('#ff8020'),
+    mountain:  [hex('#1a0830'), hex('#2a1040'), hex('#3a1850'), hex('#201035')],
+    snow:      hex('#d8c0e0'),
+    tree:      [hex('#0a120a'), hex('#142814'), hex('#1e3e1e')],
+    ground:    [hex('#0a0818'), hex('#121025')],
+    water:     [hex('#100828'), hex('#1a1040'), hex('#2a1855')],
+    cloud:     [hex('#60305080'), hex('#80406080')],
+    mist:      hex('#3a2050'),
+  },
+  'starry-lake': {
+    sky:       [hex('#020010'), hex('#050520'), hex('#0a0a30'), hex('#101845')],
+    moonColor: hex('#f0f0d0'),
+    moonGlow:  hex('#a0a080'),
+    star:      [hex('#ffffff'), hex('#c0c0ff'), hex('#ffffa0')],
+    mountain:  [hex('#080818'), hex('#0c0c25'), hex('#101035'), hex('#080815')],
+    snow:      hex('#404060'),
+    tree:      [hex('#040810'), hex('#081018'), hex('#0c1820')],
+    ground:    [hex('#060612'), hex('#080818')],
+    water:     [hex('#050518'), hex('#080825'), hex('#0a0a30')],
+    mist:      hex('#101830'),
+  },
+  'sakura-hills': {
+    sky:       [hex('#2a1535'), hex('#5a3060'), hex('#c06888'), hex('#e8a0a0'), hex('#f0d0c8'), hex('#fff0e8')],
+    sunColor:  hex('#fff0d0'),
+    sunGlow:   hex('#f0c0a0'),
+    mountain:  [hex('#2a5030'), hex('#3a6840'), hex('#508850'), hex('#60a060')],
+    snow:      hex('#d0e0c0'),
+    tree:      [hex('#3a2020'), hex('#e888a0'), hex('#f0a0b0'), hex('#f8c0cc'), hex('#ffd8e0')],
+    ground:    [hex('#305828'), hex('#408038')],
+    cloud:     [hex('#f0c8d080'), hex('#f8d8e080')],
+    mist:      hex('#c0a0b0'),
+  },
+  'neon-city': {
+    sky:       [hex('#020008'), hex('#05050f'), hex('#080815'), hex('#0a0a1a')],
+    star:      [hex('#ffffff'), hex('#8080ff')],
+    building:  [hex('#080810'), hex('#0c0c18'), hex('#101020'), hex('#141428')],
+    window:    [hex('#ff0066'), hex('#00c8ff'), hex('#ffcc00'), hex('#00ff88'), hex('#ff6600')],
+    neon:      [hex('#ff0066'), hex('#00c8ff'), hex('#9933ff')],
+    ground:    [hex('#050508'), hex('#08080c')],
+    rain:      hex('#2060a0'),
+    puddle:    [hex('#100818'), hex('#180c20')],
+  },
+  'desert-dusk': {
+    sky:       [hex('#1a0820'), hex('#4a1838'), hex('#a03040'), hex('#d86030'), hex('#e8a040'), hex('#f0d080')],
+    sunColor:  hex('#f0c060'),
+    sunGlow:   hex('#d06030'),
+    dune:      [hex('#c09050'), hex('#d8a860'), hex('#e0b870'), hex('#a07840')],
+    shadow:    hex('#806030'),
+    cactus:    [hex('#2a5020'), hex('#3a6830'), hex('#4a8040')],
+    ground:    [hex('#a08050'), hex('#b09060')],
+    rock:      [hex('#705030'), hex('#805838')],
+  },
+};
+
+// ======== LAYER GENERATORS ========
+
+function drawSky(pb, palette, type) {
+  const w = pb.w, h = pb.h;
+  const colors = palette.sky;
+  const n = colors.length;
+
+  for (let y = 0; y < h; y++) {
+    // Normalized position in sky (0=top, 1=horizon)
+    const t = y / (h * 0.7);
+    // Map to palette segments
+    const segment = clamp(t, 0, 0.999) * (n - 1);
+    const idx = Math.floor(segment);
+    const frac = segment - idx;
+    const c1 = colors[Math.min(idx, n-1)];
+    const c2 = colors[Math.min(idx+1, n-1)];
+
+    for (let x = 0; x < w; x++) {
+      pb.setC(x, y, ditherColor(x, y, c1, c2, frac));
+    }
+  }
+}
+
+function drawSun(pb, palette, cx, cy, radius) {
+  const c = palette.sunColor || palette.moonColor;
+  const glow = palette.sunGlow || palette.moonGlow;
+
+  // Glow halo (dithered)
+  for (let dy = -radius * 3; dy <= radius * 3; dy++) {
+    for (let dx = -radius * 3; dx <= radius * 3; dx++) {
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist > radius * 3) continue;
+      const px = cx + dx, py = cy + dy;
+      if (dist <= radius) {
+        // Solid sun/moon body
+        const inner = dist / radius;
+        pb.setC(px, py, ditherColor(px, py, c, glow, inner * 0.3));
+      } else {
+        // Glow ring
+        const glowT = (dist - radius) / (radius * 2);
+        if (ditherTest(px, py, 1 - glowT)) continue;
+        pb.blend(px, py, glow, Math.round((1 - glowT) * 50));
+      }
+    }
+  }
+}
+
+function drawStars(pb, palette, count) {
+  const colors = palette.star || [hex('#ffffff')];
+  for (let i = 0; i < count; i++) {
+    const x = Math.floor(hash2D(i * 7, i * 13 + 999) * pb.w);
+    const y = Math.floor(hash2D(i * 11 + 333, i * 3) * pb.h * 0.55);
+    const c = colors[Math.floor(hash2D(i, i + 777) * colors.length)];
+    const bright = 0.4 + hash2D(i + 500, i) * 0.6;
+    pb.blend(x, y, c, Math.round(bright * 255));
+    // Occasional bigger star
+    if (hash2D(i + 1000, i) > 0.92) {
+      pb.blend(x+1, y, c, Math.round(bright * 120));
+      pb.blend(x-1, y, c, Math.round(bright * 120));
+      pb.blend(x, y+1, c, Math.round(bright * 120));
+      pb.blend(x, y-1, c, Math.round(bright * 120));
+    }
+  }
+}
+
+function drawMountainRange(pb, palette, baseY, height, colorIdx, noiseScale, seed) {
+  const w = pb.w;
+  const c1 = palette.mountain[colorIdx] || palette.mountain[0];
+  const c2 = palette.mountain[Math.min(colorIdx + 1, palette.mountain.length - 1)];
+  const snow = palette.snow;
+
+  for (let x = 0; x < w; x++) {
+    // Ridge line using FBM
+    const nx = x / w * noiseScale + seed;
+    const ridgeH = fbm(nx, seed * 7.3, 5) * 0.6 + ridgeNoise(nx, seed * 3.1, 3) * 0.4;
+    const peakY = Math.round(baseY - height * ridgeH);
+
+    for (let y = peakY; y < pb.h; y++) {
+      const depth = (y - peakY) / height;
+      if (depth < 0.08 && snow && height > pb.h * 0.15) {
+        // Snow cap with dithering
+        const snowFade = depth / 0.08;
+        pb.setC(x, y, ditherColor(x, y, snow, c1, snowFade));
+      } else {
+        // Mountain body with subtle shading
+        const shade = clamp(depth * 0.3, 0, 1);
+        pb.setC(x, y, ditherColor(x, y, c1, c2, shade));
+      }
+    }
+  }
+}
+
+function drawPineTree(pb, palette, tx, baseY, h) {
+  const colors = palette.tree;
+  const trunk = colors[0];
+  const leaf1 = colors[1] || colors[0];
+  const leaf2 = colors[2] || leaf1;
+
+  // Trunk
+  pb.setC(tx, baseY, trunk);
+  pb.setC(tx, baseY - 1, trunk);
+
+  // Canopy layers
+  const layers = Math.max(2, Math.floor(h / 3));
+  for (let layer = 0; layer < layers; layer++) {
+    const ly = baseY - 2 - layer * 2;
+    const halfW = layers - layer;
+    const c = layer < layers / 2 ? leaf2 : leaf1;
+    for (let dx = -halfW; dx <= halfW; dx++) {
+      pb.setC(tx + dx, ly, c);
+      if (Math.abs(dx) < halfW) pb.setC(tx + dx, ly - 1, c);
+    }
+  }
+  // Top
+  pb.setC(tx, baseY - 2 - layers * 2, leaf1);
+}
+
+function drawSakuraTree(pb, palette, tx, baseY, h) {
+  const trunk = palette.tree[0];
+  const pinks = palette.tree.slice(1);
+
+  // Trunk
+  for (let dy = 0; dy < 4; dy++) {
+    pb.setC(tx, baseY - dy, trunk);
+    if (dy > 1) pb.setC(tx + 1, baseY - dy, trunk);
+  }
+  // Branches
+  pb.setC(tx - 1, baseY - 3, trunk);
+  pb.setC(tx + 2, baseY - 4, trunk);
+
+  // Blossom cloud
+  const r = Math.floor(h * 0.6);
+  const cy = baseY - 4 - r;
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r - 1; dx <= r + 1; dx++) {
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist > r + 0.5) continue;
+      const noise = fbm((tx + dx) * 0.3, (cy + dy) * 0.3 + SEED, 3);
+      if (noise < 0.35) continue;
+      const ci = Math.floor(noise * pinks.length) % pinks.length;
+      pb.setC(tx + dx, cy + dy, pinks[ci]);
+    }
+  }
+}
+
+function drawForest(pb, palette, baseY, density, treeType) {
+  const w = pb.w;
+  const spacing = Math.max(3, Math.floor(w / density));
+
+  for (let i = 0; i < density; i++) {
+    const tx = Math.floor(hash2D(i * 17 + SEED, i * 31) * w);
+    const variation = (hash2D(i * 23, i * 47 + SEED) - 0.5) * 6;
+    const ty = Math.round(baseY + variation);
+    const h = 6 + Math.floor(hash2D(i * 37 + SEED, i * 53) * 8);
+
+    if (treeType === 'sakura') {
+      drawSakuraTree(pb, palette, tx, ty, h);
+    } else {
+      drawPineTree(pb, palette, tx, ty, h);
+    }
+  }
+}
+
+function drawWater(pb, palette, waterLevel, time) {
+  const w = pb.w, h = pb.h;
+  const colors = palette.water;
+  if (!colors) return;
+
+  for (let y = waterLevel; y < h; y++) {
+    const depth = (y - waterLevel) / (h - waterLevel);
+    const ci = Math.min(Math.floor(depth * colors.length), colors.length - 1);
+    const c = colors[ci];
+
+    for (let x = 0; x < w; x++) {
+      // Ripple distortion
+      const wave = Math.sin((x * 0.15) + (time || 0) * 2 + y * 0.3) * 0.5 + 0.5;
+      const ripple = ditherColor(x, y, c, colors[0], wave * 0.3);
+
+      // Reflection from above (flip + darken)
+      const reflectY = waterLevel - (y - waterLevel);
+      if (reflectY >= 0) {
+        const src = pb.get(x + Math.floor(Math.sin(y * 0.2 + (time||0)) * 1.5), reflectY);
+        const reflected = [
+          Math.round(src[0] * 0.2 + ripple[0] * 0.8),
+          Math.round(src[1] * 0.2 + ripple[1] * 0.8),
+          Math.round(src[2] * 0.2 + ripple[2] * 0.8),
+        ];
+        pb.setC(x, y, reflected);
+      } else {
+        pb.setC(x, y, ripple);
+      }
+    }
+  }
+
+  // Horizon line highlight
+  for (let x = 0; x < w; x++) {
+    if (ditherTest(x, waterLevel, 0.3)) {
+      const existing = pb.get(x, waterLevel);
+      pb.blend(x, waterLevel, [180, 180, 200], 30);
+    }
+  }
+}
+
+function drawGround(pb, palette, level) {
+  const w = pb.w, h = pb.h;
+  const colors = palette.ground;
+
+  for (let y = level; y < h; y++) {
+    const depth = (y - level) / (h - level);
+    for (let x = 0; x < w; x++) {
+      const noise = fbm(x * 0.1, y * 0.1 + SEED * 3, 3);
+      const ci = noise > 0.5 ? 1 : 0;
+      pb.setC(x, y, colors[Math.min(ci, colors.length - 1)]);
+    }
+  }
+}
+
+function drawClouds(pb, palette, coverage, yStart, yEnd) {
+  if (!palette.cloud) return;
+  const w = pb.w;
+  const colors = palette.cloud.map(c =>
+    Array.isArray(c) && c.length === 4 ? c : [...(c.slice ? c.slice(0,3) : c), 128]
+  );
+
+  for (let y = yStart; y < yEnd; y++) {
+    for (let x = 0; x < w; x++) {
+      const n = fbm(x * 0.02 + SEED * 0.7, y * 0.04 + SEED * 1.3, 4);
+      if (n > (1 - coverage)) {
+        const intensity = (n - (1 - coverage)) / coverage;
+        const c = intensity > 0.5 ? (colors[1] || colors[0]) : colors[0];
+        pb.blend(x, y, c.slice(0, 3), Math.round(intensity * (c[3] || 80)));
+      }
+    }
+  }
+}
+
+function drawMist(pb, palette, level, thickness) {
+  if (!palette.mist) return;
+  const c = palette.mist;
+  for (let y = level - thickness; y < level + thickness; y++) {
+    const t = 1 - Math.abs(y - level) / thickness;
+    for (let x = 0; x < pb.w; x++) {
+      const n = fbm(x * 0.03 + SEED * 2, y * 0.05, 3);
+      if (n > 0.4) {
+        pb.blend(x, y, c, Math.round(t * n * 40));
+      }
+    }
+  }
+}
+
+// ======== BUILDING GENERATOR (Neon City) ========
+function drawBuildings(pb, palette) {
+  const w = pb.w, h = pb.h;
+  const groundY = Math.floor(h * 0.85);
+  const colors = palette.building;
+  const windows = palette.window;
+
+  // Draw ground
+  for (let y = groundY; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      pb.setC(x, y, palette.ground[y % 2 === 0 ? 0 : 1]);
+    }
+  }
+
+  // Generate buildings
+  const buildingCount = Math.floor(w / 6);
+  for (let i = 0; i < buildingCount; i++) {
+    const bx = Math.floor(hash2D(i * 7 + SEED, 100) * w);
+    const bw = 4 + Math.floor(hash2D(i * 11 + SEED, 200) * 8);
+    const bh = 15 + Math.floor(hash2D(i * 13 + SEED, 300) * (h * 0.4));
+    const by = groundY - bh;
+    const ci = Math.floor(hash2D(i * 17 + SEED, 400) * colors.length);
+    const bc = colors[ci];
+
+    // Building body
+    for (let y = by; y < groundY; y++) {
+      for (let x = bx; x < bx + bw; x++) {
+        if (x >= 0 && x < w) pb.setC(x, y, bc);
+      }
+    }
+
+    // Edges (darker)
+    for (let y = by; y < groundY; y++) {
+      if (bx >= 0 && bx < w) pb.blend(bx, y, [0,0,0], 60);
+      if (bx + bw - 1 >= 0 && bx + bw - 1 < w) pb.blend(bx + bw - 1, y, [0,0,0], 40);
+    }
+
+    // Windows
+    for (let wy = by + 2; wy < groundY - 2; wy += 3) {
+      for (let wx = bx + 1; wx < bx + bw - 1; wx += 2) {
+        if (wx < 0 || wx >= w) continue;
+        const lit = hash2D(wx + SEED, wy + SEED) > 0.4;
+        if (lit) {
+          const wc = windows[Math.floor(hash2D(wx * 3 + SEED, wy * 5) * windows.length)];
+          pb.setC(wx, wy, wc);
+          // Glow
+          pb.blend(wx-1, wy, wc, 20);
+          pb.blend(wx+1, wy, wc, 20);
+          pb.blend(wx, wy-1, wc, 15);
+          pb.blend(wx, wy+1, wc, 15);
+        }
+      }
+    }
+
+    // Roof antenna/detail
+    if (hash2D(i + SEED, 500) > 0.5) {
+      const ax = bx + Math.floor(bw / 2);
+      if (ax >= 0 && ax < w) {
+        pb.setC(ax, by - 1, bc);
+        pb.setC(ax, by - 2, bc);
+        // Neon light on top
+        const nc = palette.neon[Math.floor(hash2D(i + SEED, 600) * palette.neon.length)];
+        pb.setC(ax, by - 3, nc);
+        pb.blend(ax-1, by-3, nc, 60);
+        pb.blend(ax+1, by-3, nc, 60);
+      }
+    }
+  }
+
+  // Neon signs on some buildings
+  for (let i = 0; i < 5; i++) {
+    const sx = Math.floor(hash2D(i * 23 + SEED, 700) * w);
+    const sy = Math.floor(h * 0.3 + hash2D(i * 29 + SEED, 800) * h * 0.3);
+    const nc = palette.neon[i % palette.neon.length];
+    const len = 3 + Math.floor(hash2D(i + SEED, 900) * 6);
+    for (let dx = 0; dx < len; dx++) {
+      pb.setC(sx + dx, sy, nc);
+      pb.blend(sx + dx, sy - 1, nc, 30);
+      pb.blend(sx + dx, sy + 1, nc, 30);
+    }
+  }
+
+  // Puddle reflections at ground
+  for (let y = groundY; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const reflectY = groundY - (y - groundY);
+      if (reflectY >= 0) {
+        const src = pb.get(x, reflectY);
+        pb.blend(x, y, src, 15);
+      }
+    }
+  }
+}
+
+// ======== DUNE GENERATOR (Desert) ========
+function drawDunes(pb, palette) {
+  const w = pb.w, h = pb.h;
+  const colors = palette.dune;
+
+  // Multiple dune layers
+  for (let layer = 0; layer < 3; layer++) {
+    const baseY = Math.floor(h * (0.45 + layer * 0.12));
+    const amplitude = h * (0.08 + layer * 0.03);
+
+    for (let x = 0; x < w; x++) {
+      const nx = x / w * (3 + layer) + SEED + layer * 10;
+      const duneH = fbm(nx, layer * 5.7 + SEED, 4);
+      const peakY = Math.round(baseY - amplitude * duneH);
+
+      for (let y = peakY; y < h; y++) {
+        const depth = (y - peakY) / amplitude;
+        const ci = Math.min(layer, colors.length - 1);
+        const c = colors[ci];
+
+        // Wind shadow
+        const wind = fbm((x + layer * 50) * 0.05 + SEED, y * 0.1, 2);
+        const shadowC = palette.shadow;
+        const shaded = wind > 0.6 && depth < 0.5;
+
+        if (shaded) {
+          pb.setC(x, y, ditherColor(x, y, shadowC, c, 0.5));
+        } else {
+          pb.setC(x, y, c);
+        }
+      }
+    }
+  }
+
+  // Ground
+  const groundY = Math.floor(h * 0.75);
+  drawGround(pb, palette, groundY);
+}
+
+function drawCactus(pb, palette, cx, baseY) {
+  const colors = palette.cactus;
+  const c = colors[1] || colors[0];
+  const dark = colors[0];
+
+  // Main trunk
+  for (let dy = 0; dy < 10; dy++) {
+    pb.setC(cx, baseY - dy, c);
+    pb.setC(cx + 1, baseY - dy, dark);
+  }
+  // Left arm
+  pb.setC(cx - 1, baseY - 5, c);
+  pb.setC(cx - 1, baseY - 6, c);
+  pb.setC(cx - 1, baseY - 7, c);
+  pb.setC(cx - 2, baseY - 5, dark);
+  // Right arm
+  pb.setC(cx + 2, baseY - 3, c);
+  pb.setC(cx + 2, baseY - 4, c);
+  pb.setC(cx + 2, baseY - 5, c);
+  pb.setC(cx + 3, baseY - 3, dark);
+}
+
+// ======== SCENE RENDERERS ========
+const SCENES = {
+  'mountain-sunset': (pb, pal, time) => {
+    drawSky(pb, pal, 'sunset');
+    drawSun(pb, pal, Math.floor(pb.w * 0.7), Math.floor(pb.h * 0.22), Math.floor(pb.w * 0.06));
+    drawClouds(pb, pal, 0.35, Math.floor(pb.h * 0.05), Math.floor(pb.h * 0.3));
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.5), pb.h * 0.35, 0, 3.5, 1.0);
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.55), pb.h * 0.3, 1, 4.0, 5.0);
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.6), pb.h * 0.25, 2, 5.0, 9.0);
+    drawForest(pb, pal, Math.floor(pb.h * 0.62), Math.floor(pb.w / 5), 'pine');
+    drawWater(pb, pal, Math.floor(pb.h * 0.7), time);
+    drawMist(pb, pal, Math.floor(pb.h * 0.65), 8);
+  },
+
+  'starry-lake': (pb, pal, time) => {
+    drawSky(pb, pal, 'night');
+    drawStars(pb, pal, Math.floor(pb.w * pb.h * 0.008));
+    drawSun(pb, pal, Math.floor(pb.w * 0.75), Math.floor(pb.h * 0.15), Math.floor(pb.w * 0.04));
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.45), pb.h * 0.3, 0, 3.0, 2.0);
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.5), pb.h * 0.25, 1, 4.5, 6.0);
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.55), pb.h * 0.2, 2, 5.5, 10.0);
+    drawForest(pb, pal, Math.floor(pb.h * 0.58), Math.floor(pb.w / 8), 'pine');
+    drawWater(pb, pal, Math.floor(pb.h * 0.63), time);
+    drawMist(pb, pal, Math.floor(pb.h * 0.6), 6);
+  },
+
+  'sakura-hills': (pb, pal, time) => {
+    drawSky(pb, pal, 'sakura');
+    drawSun(pb, pal, Math.floor(pb.w * 0.3), Math.floor(pb.h * 0.18), Math.floor(pb.w * 0.05));
+    drawClouds(pb, pal, 0.3, Math.floor(pb.h * 0.05), Math.floor(pb.h * 0.25));
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.45), pb.h * 0.3, 0, 3.0, 3.0);
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.52), pb.h * 0.25, 1, 4.0, 7.0);
+    drawMountainRange(pb, pal, Math.floor(pb.h * 0.58), pb.h * 0.2, 2, 5.0, 11.0);
+    drawGround(pb, pal, Math.floor(pb.h * 0.65));
+    drawForest(pb, pal, Math.floor(pb.h * 0.63), Math.floor(pb.w / 6), 'sakura');
+    drawMist(pb, pal, Math.floor(pb.h * 0.6), 10);
+  },
+
+  'neon-city': (pb, pal, time) => {
+    drawSky(pb, pal, 'night');
+    drawStars(pb, pal, Math.floor(pb.w * pb.h * 0.003));
+    drawBuildings(pb, pal);
+  },
+
+  'desert-dusk': (pb, pal, time) => {
+    drawSky(pb, pal, 'sunset');
+    drawSun(pb, pal, Math.floor(pb.w * 0.5), Math.floor(pb.h * 0.28), Math.floor(pb.w * 0.07));
+    drawDunes(pb, pal);
+    // Cacti
+    const cactusCount = Math.floor(pb.w / 25);
+    for (let i = 0; i < cactusCount; i++) {
+      const cx = Math.floor(hash2D(i * 19 + SEED, 1234) * pb.w);
+      const cy = Math.floor(pb.h * 0.6 + hash2D(i * 23 + SEED, 5678) * pb.h * 0.15);
+      drawCactus(pb, pal, cx, cy);
+    }
+  },
+};
+
+// ======== MAIN RENDERER ========
+let W = 128, H = 96, SCALE = 4, SCENE = 'mountain-sunset';
+let pb, canvas, ctx, tempCanvas, tempCtx;
+let animTime = 0;
+let animFrame = null;
+
+function init() {
+  canvas = document.getElementById('canvas');
+  ctx = canvas.getContext('2d');
+  resize();
+}
+
+function resize() {
+  canvas.width = W * SCALE;
+  canvas.height = H * SCALE;
+  canvas.style.maxWidth = '95vw';
+  canvas.style.maxHeight = 'calc(95vh - 60px)';
+  // Keep aspect
+  const aspect = W / H;
+  const maxW = window.innerWidth * 0.95;
+  const maxH = (window.innerHeight - 60) * 0.95;
+  if (maxW / maxH > aspect) {
+    canvas.style.height = maxH + 'px';
+    canvas.style.width = (maxH * aspect) + 'px';
+  } else {
+    canvas.style.width = maxW + 'px';
+    canvas.style.height = (maxW / aspect) + 'px';
+  }
+
+  tempCanvas = document.createElement('canvas');
+  tempCanvas.width = W;
+  tempCanvas.height = H;
+  tempCtx = tempCanvas.getContext('2d');
+}
+
+function render(time) {
+  pb = new PixelBuffer(W, H);
+  const pal = PALETTES[SCENE];
+  if (!pal) return;
+
+  const renderFn = SCENES[SCENE];
+  if (renderFn) renderFn(pb, pal, time || 0);
+
+  // Flush to canvas
+  const imageData = new ImageData(pb.buf, W, H);
+  tempCtx.putImageData(imageData, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tempCanvas, 0, 0, W * SCALE, H * SCALE);
+}
+
+function animate() {
+  animTime += 0.016;
+  render(animTime);
+  animFrame = requestAnimationFrame(animate);
+}
+
+function startRender() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  resize();
+  updateInfo();
+
+  // Check if scene has animation (water)
+  const hasAnimation = SCENE === 'mountain-sunset' || SCENE === 'starry-lake';
+  if (hasAnimation) {
+    animTime = 0;
+    animate();
+  } else {
+    render(0);
+  }
+}
+
+function updateInfo() {
+  document.getElementById('info').textContent = `${W}×${H} · ${SCALE}x · ${SCENE}`;
+}
+
+// ======== UI ========
+document.querySelectorAll('.scene-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    SCENE = btn.dataset.scene;
+    startRender();
+  });
+});
+
+document.querySelectorAll('.size-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    W = parseInt(btn.dataset.w);
+    H = parseInt(btn.dataset.h);
+    startRender();
+  });
+});
+
+document.querySelectorAll('.scale-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    SCALE = parseInt(btn.dataset.s);
+    startRender();
+  });
+});
+
+document.getElementById('btn-regen').addEventListener('click', () => {
+  SEED = Math.random() * 99999 | 0;
+  startRender();
+});
+
+// ======== INIT ========
+init();
+startRender();
+</script>
+</body>
+</html>

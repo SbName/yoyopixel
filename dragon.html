@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fire Dragon · Pixel Art</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: linear-gradient(180deg, #0a0008 0%, #1a0010 30%, #200815 60%, #0a0005 100%);
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* ========== Lava ground ========== */
+  .ground {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 20vh;
+    background: linear-gradient(180deg,
+      transparent 0%,
+      rgba(40, 5, 0, 0.8) 30%,
+      #1a0800 100%
+    );
+  }
+
+  .lava-crack {
+    position: absolute;
+    bottom: 4vh;
+    height: 2px;
+    border-radius: 1px;
+    animation: lavaPulse var(--dur) ease-in-out infinite;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes lavaPulse {
+    0%, 100% {
+      background: #ff4500;
+      box-shadow: 0 0 4px #ff4500, 0 0 10px rgba(255, 69, 0, 0.3);
+      opacity: 0.4;
+    }
+    50% {
+      background: #ff6a00;
+      box-shadow: 0 0 8px #ff6a00, 0 0 20px rgba(255, 106, 0, 0.5);
+      opacity: 0.8;
+    }
+  }
+
+  /* ========== Ember particles ========== */
+  .ember {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: emberRise var(--dur) ease-out infinite;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes emberRise {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(1);
+    }
+    15% { opacity: 0.9; }
+    80% { opacity: 0.4; }
+    100% {
+      opacity: 0;
+      transform: translate(var(--drift), -40vh) scale(0.2);
+    }
+  }
+
+  /* ========== Fire breath particles ========== */
+  .fire-particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  @keyframes fireBreath {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(1);
+    }
+    20% { opacity: 0.9; }
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy)) scale(0.1);
+    }
+  }
+
+  /* ========== Character ========== */
+  .character-wrap {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 2vh;
+  }
+
+  .pixel-grid {
+    display: grid;
+    gap: 0;
+    image-rendering: pixelated;
+    animation: hover 5s ease-in-out infinite;
+    filter: drop-shadow(0 0 15px rgba(255, 80, 0, 0.15));
+  }
+
+  @keyframes hover {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-4px) rotate(0.5deg); }
+    75% { transform: translateY(2px) rotate(-0.3deg); }
+  }
+
+  .px {
+    opacity: 0;
+    animation: pixelIn 0.4s ease forwards;
+  }
+
+  @keyframes pixelIn {
+    to { opacity: 1; }
+  }
+
+  .char-shadow {
+    width: 120px;
+    height: 14px;
+    background: radial-gradient(ellipse,
+      rgba(255, 80, 0, 0.12) 0%,
+      rgba(180, 30, 0, 0.06) 40%,
+      transparent 70%
+    );
+    margin-top: -4px;
+    animation: shadowPulse 5s ease-in-out infinite;
+  }
+
+  @keyframes shadowPulse {
+    0%, 100% { transform: scaleX(1); opacity: 0.5; }
+    50% { transform: scaleX(1.1); opacity: 0.7; }
+  }
+
+  /* ========== Title ========== */
+  .title-area {
+    position: absolute;
+    bottom: 4vh;
+    text-align: center;
+    z-index: 20;
+  }
+
+  .title-main {
+    font-size: 24px;
+    letter-spacing: 12px;
+    color: #ff6600;
+    text-shadow:
+      0 0 10px rgba(255, 102, 0, 0.6),
+      0 0 30px rgba(255, 60, 0, 0.3),
+      0 0 60px rgba(255, 30, 0, 0.15);
+    margin-bottom: 6px;
+  }
+
+  .title-sub {
+    font-size: 10px;
+    letter-spacing: 6px;
+    color: #553320;
+    text-transform: uppercase;
+  }
+
+  /* ========== Back link ========== */
+  .back-link {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: #332;
+    text-decoration: none;
+    font-size: 13px;
+    letter-spacing: 1px;
+    z-index: 30;
+    transition: color 0.3s;
+  }
+  .back-link:hover { color: #ff6600; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; Gallery</a>
+
+<!-- Scene -->
+<div class="ground"></div>
+<div id="embers"></div>
+<div id="lava-cracks"></div>
+<div id="fire-breath"></div>
+
+<!-- Character -->
+<div class="character-wrap">
+  <div id="character" class="pixel-grid"></div>
+  <div class="char-shadow"></div>
+</div>
+
+<!-- Title -->
+<div class="title-area">
+  <div class="title-main">Fire Dragon</div>
+  <div class="title-sub">Ancient Beast · Pixel Art</div>
+</div>
+
+<script>
+// ============================================
+// Fire Dragon · 24×24 · Detailed
+// ============================================
+const DRAGON = {
+  width: 24,
+  height: 24,
+  palette: {
+    '.': 'transparent',
+    // Body scales
+    'R': '#8b1a1a',   // dark red
+    'r': '#cc3030',   // red
+    'O': '#e06020',   // orange
+    'o': '#ff8c40',   // light orange
+    // Belly / underbody
+    'Y': '#e8a030',   // dark yellow belly
+    'y': '#ffc860',   // light yellow belly
+    // Wings
+    'W': '#6a1010',   // wing membrane dark
+    'w': '#9a2020',   // wing membrane
+    'U': '#cc4040',   // wing membrane light
+    // Eye
+    'E': '#ffcc00',   // yellow eye
+    'e': '#ff8800',   // eye dark
+    // Horns / claws
+    'H': '#d0c090',   // horn light
+    'h': '#a08060',   // horn dark
+    // Mouth / fire
+    'F': '#ff2200',   // fire red
+    'f': '#ff8800',   // fire orange
+    'G': '#ffcc00',   // fire yellow
+    'D': '#1a0a05',   // dark detail
+    'N': '#4a1a1a',   // nostril
+  },
+  pixels: [
+    // 012345678901234567890123
+    '...HH.............WW...',  //  0 — horns + wing tip
+    '..HhH............WwW...',  //  1
+    '..hRRRR........WwwUW...',  //  2 — head start + wing
+    '.RRrRRRR.....WwwUUW....',  //  3
+    '.RREeRRRR..WwwUUUW.....',  //  4 — eye
+    '.RRRNRRRRWwwUUUWW......',  //  5 — nostril
+    '..RRRRRRRRwUUUWW.......',  //  6
+    'fGRRrRRRRRRUUWW........',  //  7 — fire breath
+    'FfGRRrYRRRRRWW.........',  //  8
+    '.FfRRrYYRRRRR..........',  //  9
+    '..RRRrYYYRRRRR.........',  // 10
+    '..RRRRYYRRRRRRr........',  // 11
+    '...RRRYYRRRRRRr........',  // 12
+    '...RRRRYRRRRRr.........',  // 13
+    '....RRRYRRRRr..........',  // 14
+    '....rRRYRRRr...........',  // 15
+    '.....rRYRRr............',  // 16
+    '....hRRYRRRh...........',  // 17 — legs
+    '...hhRRRRRRhh..........',  // 18
+    '...hh.RRRR.hh..........',  // 19
+    '..DD..RRRR..DD.........',  // 20 — claws
+    '..DD...RR...DD.........',  // 21
+    '.........Rr............',  // 22 — tail
+    '..........rr............', // 23
+  ]
+};
+
+// ============================================
+// Render
+// ============================================
+const SCALE = 7;
+const grid = document.getElementById('character');
+grid.style.gridTemplateColumns = `repeat(${DRAGON.width}, ${SCALE}px)`;
+
+const pixelElements = [];
+
+DRAGON.pixels.forEach((row, y) => {
+  for (let x = 0; x < DRAGON.width; x++) {
+    const ch = row[x] || '.';
+    const color = DRAGON.palette[ch] || 'transparent';
+    const px = document.createElement('div');
+    px.className = 'px';
+    px.style.width = SCALE + 'px';
+    px.style.height = SCALE + 'px';
+    px.style.background = color;
+    px.style.animationDelay = (x * 0.02 + y * 0.04) + 's';
+    px.dataset.char = ch;
+    px.dataset.x = x;
+    px.dataset.y = y;
+    grid.appendChild(px);
+    pixelElements.push({ el: px, ch, x, y, baseColor: color });
+  }
+});
+
+// ============================================
+// Eye glow
+// ============================================
+const eyePixels = pixelElements.filter(p => p.ch === 'E' || p.ch === 'e');
+
+function eyeGlow() {
+  const time = Date.now() / 1000;
+  eyePixels.forEach(p => {
+    const pulse = 0.6 + Math.sin(time * 2) * 0.4;
+    p.el.style.boxShadow = `0 0 6px 2px rgba(255, 200, 0, ${pulse.toFixed(2)})`;
+  });
+  requestAnimationFrame(eyeGlow);
+}
+setTimeout(eyeGlow, 1500);
+
+// ============================================
+// Fire breath glow
+// ============================================
+const firePixels = pixelElements.filter(p =>
+  (p.ch === 'F' || p.ch === 'f' || p.ch === 'G') && p.baseColor !== 'transparent'
+);
+
+function fireGlow() {
+  const time = Date.now() / 1000;
+  firePixels.forEach(p => {
+    const flicker = 1 + Math.sin(time * 8 + p.x * 2) * 0.4 + Math.random() * 0.1;
+    p.el.style.filter = `brightness(${flicker})`;
+    const glow = 0.3 + Math.sin(time * 5 + p.x) * 0.3;
+    p.el.style.boxShadow = `0 0 4px 1px rgba(255, 100, 0, ${glow.toFixed(2)})`;
+  });
+  requestAnimationFrame(fireGlow);
+}
+setTimeout(fireGlow, 1500);
+
+// ============================================
+// Scale shimmer
+// ============================================
+const scalePixels = pixelElements.filter(p =>
+  (p.ch === 'r' || p.ch === 'O' || p.ch === 'o') && p.baseColor !== 'transparent'
+);
+
+function scaleShimmer() {
+  const time = Date.now() / 1000;
+  scalePixels.forEach(p => {
+    const wave = Math.sin(time * 1.5 + p.x * 0.3 + p.y * 0.5);
+    const brightness = 1 + wave * 0.1;
+    p.el.style.filter = `brightness(${brightness})`;
+  });
+  requestAnimationFrame(scaleShimmer);
+}
+setTimeout(scaleShimmer, 1500);
+
+// ============================================
+// Ember particles
+// ============================================
+function createEmbers() {
+  const container = document.getElementById('embers');
+  const colors = ['#ff4500', '#ff6600', '#ff8800', '#ffaa00', '#ffcc00'];
+
+  for (let i = 0; i < 30; i++) {
+    const ember = document.createElement('div');
+    ember.className = 'ember';
+    const size = 2 + Math.random() * 3;
+    ember.style.width = size + 'px';
+    ember.style.height = size + 'px';
+    ember.style.background = colors[Math.floor(Math.random() * colors.length)];
+    ember.style.boxShadow = `0 0 ${size}px ${ember.style.background}`;
+    ember.style.left = (30 + Math.random() * 40) + 'vw';
+    ember.style.bottom = (5 + Math.random() * 15) + 'vh';
+    ember.style.setProperty('--dur', (3 + Math.random() * 5) + 's');
+    ember.style.setProperty('--delay', (Math.random() * 6) + 's');
+    ember.style.setProperty('--drift', (Math.random() * 100 - 50) + 'px');
+    container.appendChild(ember);
+  }
+}
+createEmbers();
+
+// ============================================
+// Lava cracks
+// ============================================
+function createLavaCracks() {
+  const container = document.getElementById('lava-cracks');
+  for (let i = 0; i < 8; i++) {
+    const crack = document.createElement('div');
+    crack.className = 'lava-crack';
+    crack.style.width = (30 + Math.random() * 80) + 'px';
+    crack.style.left = (10 + Math.random() * 80) + 'vw';
+    crack.style.bottom = (2 + Math.random() * 8) + 'vh';
+    crack.style.setProperty('--dur', (2 + Math.random() * 3) + 's');
+    crack.style.setProperty('--delay', (Math.random() * 3) + 's');
+    container.appendChild(crack);
+  }
+}
+createLavaCracks();
+</script>
+</body>
+</html>

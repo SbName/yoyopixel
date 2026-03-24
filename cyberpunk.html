@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyberpunk Girl · Pixel Art</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: linear-gradient(180deg, #05050f 0%, #0a0a1a 30%, #0f0820 60%, #080010 100%);
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* ========== Neon glow background lines ========== */
+  .neon-line {
+    position: absolute;
+    height: 1px;
+    opacity: 0.15;
+    pointer-events: none;
+  }
+
+  .neon-line.horizontal {
+    width: 100vw;
+    left: 0;
+  }
+
+  .neon-line.vertical {
+    width: 1px;
+    height: 100vh;
+    top: 0;
+  }
+
+  /* ========== Rain ========== */
+  .rain-drop {
+    position: absolute;
+    width: 1px;
+    background: linear-gradient(180deg, transparent, rgba(0, 200, 255, 0.4), transparent);
+    pointer-events: none;
+    animation: rainFall var(--dur) linear infinite;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes rainFall {
+    0% { transform: translateY(-20px); opacity: 0; }
+    10% { opacity: 0.7; }
+    90% { opacity: 0.5; }
+    100% { transform: translateY(calc(100vh + 20px)); opacity: 0; }
+  }
+
+  /* ========== Neon signs (background decoration) ========== */
+  .neon-sign {
+    position: absolute;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    pointer-events: none;
+    animation: neonFlicker var(--dur) ease-in-out infinite;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes neonFlicker {
+    0%, 100% { opacity: var(--base-op); }
+    5% { opacity: 0.1; }
+    6% { opacity: var(--base-op); }
+    50% { opacity: var(--base-op); }
+    52% { opacity: 0.2; }
+    53% { opacity: var(--base-op); }
+    80% { opacity: var(--base-op); }
+    81% { opacity: 0.05; }
+    82% { opacity: 0.3; }
+    83% { opacity: var(--base-op); }
+  }
+
+  /* ========== Ground / Reflection ========== */
+  .ground {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 22vh;
+    background: linear-gradient(180deg,
+      transparent 0%,
+      rgba(0, 0, 0, 0.6) 20%,
+      #050510 100%
+    );
+  }
+
+  .puddle {
+    position: absolute;
+    bottom: 2vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    height: 8px;
+    background: linear-gradient(90deg,
+      transparent,
+      rgba(0, 200, 255, 0.06) 30%,
+      rgba(255, 0, 100, 0.06) 70%,
+      transparent
+    );
+    border-radius: 50%;
+    animation: puddleShimmer 3s ease-in-out infinite;
+  }
+
+  @keyframes puddleShimmer {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.8; }
+  }
+
+  /* ========== Character ========== */
+  .character-wrap {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 4vh;
+  }
+
+  .pixel-grid {
+    display: grid;
+    gap: 0;
+    image-rendering: pixelated;
+    animation: breathe 4s ease-in-out infinite;
+    filter: drop-shadow(0 0 12px rgba(255, 0, 100, 0.2))
+            drop-shadow(0 0 24px rgba(0, 200, 255, 0.1));
+  }
+
+  @keyframes breathe {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+
+  .pixel-grid .px {
+    transition: background-color 0.3s, filter 0.3s;
+  }
+
+  .px {
+    opacity: 0;
+    animation: pixelIn 0.4s ease forwards;
+  }
+
+  @keyframes pixelIn {
+    to { opacity: 1; }
+  }
+
+  /* ========== Neon glow on character ========== */
+  .gleam {
+    animation: neonGleam 0.5s ease-out;
+  }
+
+  @keyframes neonGleam {
+    0% { filter: brightness(1); }
+    30% { filter: brightness(2.5) saturate(2); }
+    100% { filter: brightness(1); }
+  }
+
+  /* ========== Character shadow ========== */
+  .char-shadow {
+    width: 100px;
+    height: 10px;
+    background: radial-gradient(ellipse,
+      rgba(255, 0, 100, 0.15) 0%,
+      rgba(0, 200, 255, 0.08) 40%,
+      transparent 70%
+    );
+    margin-top: -2px;
+    animation: shadowPulse 4s ease-in-out infinite;
+  }
+
+  @keyframes shadowPulse {
+    0%, 100% { transform: scaleX(1); opacity: 0.6; }
+    50% { transform: scaleX(1.08); opacity: 0.8; }
+  }
+
+  /* ========== Title ========== */
+  .title-area {
+    position: absolute;
+    bottom: 4vh;
+    text-align: center;
+    z-index: 20;
+  }
+
+  .title-main {
+    font-size: 20px;
+    letter-spacing: 10px;
+    text-transform: uppercase;
+    color: #ff0066;
+    text-shadow:
+      0 0 10px rgba(255, 0, 102, 0.8),
+      0 0 30px rgba(255, 0, 102, 0.4),
+      0 0 60px rgba(255, 0, 102, 0.2);
+    margin-bottom: 6px;
+  }
+
+  .title-sub {
+    font-size: 10px;
+    letter-spacing: 6px;
+    color: #00c8ff;
+    text-shadow: 0 0 10px rgba(0, 200, 255, 0.5);
+    text-transform: uppercase;
+  }
+
+  /* ========== Back link ========== */
+  .back-link {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: #333;
+    text-decoration: none;
+    font-size: 13px;
+    letter-spacing: 1px;
+    z-index: 30;
+    transition: color 0.3s;
+  }
+  .back-link:hover { color: #ff0066; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; Gallery</a>
+
+<!-- Scene -->
+<div class="ground"></div>
+<div class="puddle"></div>
+<div id="rain"></div>
+<div id="neon-lines"></div>
+
+<!-- Character -->
+<div class="character-wrap">
+  <div id="character" class="pixel-grid"></div>
+  <div class="char-shadow"></div>
+</div>
+
+<!-- Title -->
+<div class="title-area">
+  <div class="title-main">Neon Edge</div>
+  <div class="title-sub">Cyberpunk · 2087</div>
+</div>
+
+<script>
+// ============================================
+// Cyberpunk Girl · 32×32 · Detailed
+// ============================================
+const CHARACTER = {
+  width: 32,
+  height: 32,
+  palette: {
+    '.': 'transparent',
+    // Hair
+    'H': '#1a0033',   // dark purple hair
+    'h': '#330066',   // mid purple hair
+    'i': '#6600cc',   // bright purple hair
+    'j': '#9933ff',   // purple highlight
+    // Skin
+    'S': '#f0c8a0',   // skin base
+    's': '#d8a878',   // skin shadow
+    // Face
+    'E': '#0a0a0a',   // eye dark
+    'C': '#00ffcc',   // cyber eye (left)
+    'P': '#ff0066',   // cyber eye (right)
+    'M': '#cc4466',   // mouth
+    // Jacket
+    'B': '#0a0a14',   // black jacket
+    'b': '#1a1a2e',   // jacket lighter
+    'L': '#2a2a40',   // jacket highlight
+    // Neon trim
+    'N': '#ff0066',   // neon pink
+    'n': '#ff3388',   // neon pink light
+    'T': '#00c8ff',   // neon cyan
+    't': '#66ddff',   // neon cyan light
+    // Tech / details
+    'G': '#303040',   // gray tech
+    'g': '#505068',   // gray light
+    'W': '#e0e0e0',   // white
+    'D': '#141420',   // dark boot
+    'R': '#ff2040',   // red accent
+  },
+  pixels: [
+    // 01234567890123456789012345678901
+    '................................',  //  0
+    '..........Hhhhhhhh.............',  //  1
+    '.........HhiiiiiihhH...........',  //  2
+    '........HhijjjjiiihhH..........',  //  3
+    '.......HhiijjjjiiiihhH.........',  //  4
+    '......HhiiiiiiiiiiiihhH........',  //  5
+    '......HhiiSSSSSSiiihh..........',  //  6
+    '......HhiSSSSSSSSihh...........',  //  7
+    '......HhSSDSSSSDSSh............',  //  8
+    '......hiSCESSSSEPShi...........',  //  9
+    '......hiSSSSsSSSSShij..........',  // 10
+    '.......hSSSSMSSSS..ij..........',  // 11
+    '........sSSSSSSSs..j...........',  // 12
+    '.........SSGSSGSS..............',  // 13
+    '........NbBGBBGBbN.............',  // 14
+    '.......NBbBBBBBBbBN............',  // 15
+    '......NBBbBTttTBbBBN...........',  // 16
+    '.....NBBBbBBBBBBbBBBN..........',  // 17
+    '....SBBBBbBBBBBBbBBBBS.........',  // 18
+    '....SBBNNbBBBBBBbNNBBS.........',  // 19
+    '.....BBBBbBBBBBBbBBBB..........',  // 20
+    '.....BBBBBbBBBBbBBBBB..........',  // 21
+    '.....BBBBBbBBBBbBBBBB..........',  // 22
+    '.....BBBB..BBBB..BBBB..........',  // 23
+    '.....BBBB..BBBB..BBBB..........',  // 24
+    '.....BBB...BBB...BBB...........',  // 25
+    '.....BBB...BBB...BBB...........',  // 26
+    '......SS....SS....SS...........',  // 27
+    '.....DDND..DDND..DDND..........',  // 28
+    '.....DDDD..DDDD..DDDD..........',  // 29
+    '................................',  // 30
+    '................................',  // 31
+  ]
+};
+
+// ============================================
+// Render
+// ============================================
+const SCALE = 6;
+const grid = document.getElementById('character');
+grid.style.gridTemplateColumns = `repeat(${CHARACTER.width}, ${SCALE}px)`;
+
+const pixelElements = [];
+
+CHARACTER.pixels.forEach((row, y) => {
+  for (let x = 0; x < CHARACTER.width; x++) {
+    const ch = row[x] || '.';
+    const color = CHARACTER.palette[ch] || 'transparent';
+    const px = document.createElement('div');
+    px.className = 'px';
+    px.style.width = SCALE + 'px';
+    px.style.height = SCALE + 'px';
+    px.style.background = color;
+    px.style.animationDelay = (x * 0.015 + y * 0.03) + 's';
+    px.dataset.char = ch;
+    px.dataset.x = x;
+    px.dataset.y = y;
+    grid.appendChild(px);
+    pixelElements.push({ el: px, ch, x, y, baseColor: color });
+  }
+});
+
+// ============================================
+// Neon trim gleam
+// ============================================
+function neonGleam() {
+  const neonPixels = pixelElements.filter(p =>
+    (p.ch === 'N' || p.ch === 'n' || p.ch === 'T' || p.ch === 't' || p.ch === 'C' || p.ch === 'P') &&
+    p.baseColor !== 'transparent'
+  );
+
+  neonPixels.sort((a, b) => a.y - b.y || a.x - b.x);
+
+  neonPixels.forEach((p, i) => {
+    setTimeout(() => {
+      const glowColor = (p.ch === 'T' || p.ch === 't' || p.ch === 'C')
+        ? 'rgba(0, 200, 255, 0.8)' : 'rgba(255, 0, 102, 0.8)';
+      p.el.style.background = '#ffffff';
+      p.el.style.boxShadow = `0 0 8px 3px ${glowColor}`;
+      setTimeout(() => {
+        p.el.style.background = p.baseColor;
+        p.el.style.boxShadow = 'none';
+      }, 250);
+    }, i * 50);
+  });
+}
+
+setTimeout(() => {
+  neonGleam();
+  setInterval(neonGleam, 6000);
+}, 2000);
+
+// ============================================
+// Cyber eye glow pulse
+// ============================================
+const eyePixels = pixelElements.filter(p => p.ch === 'C' || p.ch === 'P');
+
+function eyeGlow() {
+  const time = Date.now() / 1000;
+  eyePixels.forEach(p => {
+    const pulse = 0.7 + Math.sin(time * 3) * 0.3;
+    const glowColor = p.ch === 'C' ? 'rgba(0, 255, 200, X)' : 'rgba(255, 0, 102, X)';
+    p.el.style.boxShadow = `0 0 6px 2px ${glowColor.replace('X', pulse.toFixed(2))}`;
+  });
+  requestAnimationFrame(eyeGlow);
+}
+setTimeout(eyeGlow, 1500);
+
+// ============================================
+// Hair wind effect
+// ============================================
+const hairPixels = pixelElements.filter(p =>
+  (p.ch === 'i' || p.ch === 'j') && p.y <= 7
+);
+
+function windEffect() {
+  const time = Date.now() / 1000;
+  hairPixels.forEach(p => {
+    const wave = Math.sin(time * 2.5 + p.x * 0.4 + p.y * 0.3);
+    const brightness = 1 + wave * 0.2;
+    p.el.style.filter = `brightness(${brightness})`;
+  });
+  requestAnimationFrame(windEffect);
+}
+setTimeout(windEffect, 1500);
+
+// ============================================
+// Rain
+// ============================================
+function createRain() {
+  const container = document.getElementById('rain');
+  for (let i = 0; i < 60; i++) {
+    const drop = document.createElement('div');
+    drop.className = 'rain-drop';
+    const h = 10 + Math.random() * 20;
+    drop.style.height = h + 'px';
+    drop.style.left = Math.random() * 100 + 'vw';
+    drop.style.top = '-30px';
+    drop.style.setProperty('--dur', (0.5 + Math.random() * 0.8) + 's');
+    drop.style.setProperty('--delay', (Math.random() * 2) + 's');
+    drop.style.opacity = 0.2 + Math.random() * 0.3;
+    container.appendChild(drop);
+  }
+}
+createRain();
+
+// ============================================
+// Neon grid lines
+// ============================================
+function createNeonLines() {
+  const container = document.getElementById('neon-lines');
+  const colors = ['#ff006640', '#00c8ff30', '#9933ff30'];
+
+  // Horizontal lines
+  for (let i = 0; i < 6; i++) {
+    const line = document.createElement('div');
+    line.className = 'neon-line horizontal';
+    line.style.top = (15 + Math.random() * 70) + 'vh';
+    line.style.background = `linear-gradient(90deg, transparent, ${colors[i % 3]}, transparent)`;
+    container.appendChild(line);
+  }
+
+  // Vertical lines
+  for (let i = 0; i < 4; i++) {
+    const line = document.createElement('div');
+    line.className = 'neon-line vertical';
+    line.style.left = (10 + Math.random() * 80) + 'vw';
+    line.style.background = `linear-gradient(180deg, transparent, ${colors[i % 3]}, transparent)`;
+    container.appendChild(line);
+  }
+}
+createNeonLines();
+
+// ============================================
+// Neon signs in background
+// ============================================
+function createNeonSigns() {
+  const signs = [
+    { text: 'ネオン', x: '8vw', y: '12vh', color: '#ff0066', size: '16px' },
+    { text: 'OPEN', x: '78vw', y: '20vh', color: '#00c8ff', size: '12px' },
+    { text: '24H', x: '85vw', y: '35vh', color: '#ff0066', size: '10px' },
+    { text: '酒', x: '12vw', y: '40vh', color: '#9933ff', size: '20px' },
+    { text: 'BAR', x: '72vw', y: '55vh', color: '#00ffcc', size: '11px' },
+  ];
+
+  signs.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'neon-sign';
+    el.textContent = s.text;
+    el.style.left = s.x;
+    el.style.top = s.y;
+    el.style.color = s.color;
+    el.style.fontSize = s.size;
+    el.style.textShadow = `0 0 10px ${s.color}, 0 0 30px ${s.color}40`;
+    el.style.setProperty('--dur', (3 + Math.random() * 4) + 's');
+    el.style.setProperty('--delay', (Math.random() * 3) + 's');
+    el.style.setProperty('--base-op', (0.3 + Math.random() * 0.4).toFixed(2));
+    document.body.appendChild(el);
+  });
+}
+createNeonSigns();
+</script>
+</body>
+</html>

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Icons · 8×8 Collection</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    background: #0d0d1a;
+    font-family: 'Courier New', monospace;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    gap: 48px;
+  }
+
+  .header {
+    text-align: center;
+  }
+
+  .header h1 {
+    font-size: 22px;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #e94560;
+    text-shadow: 0 0 15px rgba(233, 69, 96, 0.3);
+    margin-bottom: 8px;
+  }
+
+  .header .sub {
+    font-size: 11px;
+    color: #444;
+    letter-spacing: 3px;
+  }
+
+  /* ========== Icon Grid ========== */
+  .icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 24px;
+    max-width: 800px;
+    width: 100%;
+  }
+
+  .icon-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 12px;
+    background: #12162a;
+    border: 1px solid #1a2040;
+    border-radius: 10px;
+    cursor: default;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .icon-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 0%, var(--glow) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .icon-card:hover::before {
+    opacity: 1;
+  }
+
+  .icon-card:hover {
+    transform: translateY(-4px);
+    border-color: #2a3060;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .icon-card:hover .pixel-grid {
+    animation: bounce 0.5s ease;
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: scale(1); }
+    40% { transform: scale(1.15); }
+    60% { transform: scale(0.95); }
+    80% { transform: scale(1.05); }
+  }
+
+  .icon-card .label {
+    font-size: 10px;
+    color: #555;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ========== Pixel Grid ========== */
+  .pixel-grid {
+    display: grid;
+    gap: 0;
+    image-rendering: pixelated;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ========== Scale Selector ========== */
+  .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .controls span {
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 1px;
+  }
+
+  .controls button {
+    background: #1a2040;
+    border: 1px solid #2a3060;
+    color: #666;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .controls button:hover {
+    border-color: #e94560;
+    color: #e94560;
+  }
+
+  .controls button.active {
+    background: #e94560;
+    border-color: #e94560;
+    color: #fff;
+  }
+
+  /* ========== Usage Section ========== */
+  .usage {
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .usage h2 {
+    font-size: 13px;
+    color: #e94560;
+    letter-spacing: 3px;
+    margin-bottom: 12px;
+  }
+
+  .usage pre {
+    background: #12162a;
+    border: 1px solid #1a2040;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 11px;
+    color: #888;
+    line-height: 1.6;
+    text-align: left;
+    overflow-x: auto;
+  }
+
+  .usage pre .kw { color: #e94560; }
+  .usage pre .str { color: #00ff88; }
+  .usage pre .cmt { color: #333; }
+
+  /* ========== Back link ========== */
+  .back-link {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    color: #333;
+    text-decoration: none;
+    font-size: 13px;
+    letter-spacing: 1px;
+    z-index: 30;
+    transition: color 0.3s;
+  }
+  .back-link:hover { color: #e94560; }
+</style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">&larr; Gallery</a>
+
+<div class="header">
+  <h1>Pixel Icons</h1>
+  <div class="sub">8&times;8 Micro &middot; Minimal Detail &middot; Pure Code</div>
+</div>
+
+<div class="controls">
+  <span>SCALE:</span>
+  <button data-scale="4">4x</button>
+  <button data-scale="6" class="active">6x</button>
+  <button data-scale="8">8x</button>
+  <button data-scale="10">10x</button>
+</div>
+
+<div id="icon-grid" class="icon-grid"></div>
+
+<div class="usage">
+  <h2>DATA FORMAT</h2>
+  <pre><span class="cmt">// Each icon is just 8 strings of 8 chars</span>
+<span class="kw">const</span> heart = {
+  name: <span class="str">'Heart'</span>,
+  width: 8, height: 8,
+  palette: { <span class="str">'R'</span>: <span class="str">'#e94560'</span>, <span class="str">'P'</span>: <span class="str">'#ff6b8a'</span> },
+  pixels: [
+    <span class="str">'........'</span>,
+    <span class="str">'.RR.RR..'</span>,
+    <span class="str">'RPPRRPPR'</span>,
+    <span class="str">'RPPPPPPR'</span>,
+    <span class="str">'.RPPPPPR'</span>,
+    <span class="str">'..RPPR..'</span>,
+    <span class="str">'...RR...'</span>,
+    <span class="str">'........'</span>,
+  ]
+};</pre>
+</div>
+
+<script>
+// ============================================
+// 8×8 Micro Icon Collection
+// ============================================
+const ICONS = [
+  {
+    name: 'Heart',
+    glow: 'rgba(233, 69, 96, 0.08)',
+    palette: { 'R': '#e94560', 'P': '#ff6b8a' },
+    pixels: [
+      '........',
+      '.RR.RR..',
+      'RPPRRPPR',
+      'RPPPPPPR',
+      '.RPPPPPR',
+      '..RPPR..',
+      '...RR...',
+      '........',
+    ]
+  },
+  {
+    name: 'Star',
+    glow: 'rgba(255, 215, 0, 0.08)',
+    palette: { 'Y': '#ffd700', 'G': '#ffaa00' },
+    pixels: [
+      '...YY...',
+      '...YY...',
+      '.YYYYYY.',
+      'YYGYYGYY',
+      '..YGGY..',
+      '.YYGGYY.',
+      '.YY..YY.',
+      'YY....YY',
+    ]
+  },
+  {
+    name: 'Sword',
+    glow: 'rgba(200, 204, 212, 0.08)',
+    palette: { 'A': '#c8ccd4', 'G': '#d4af37', 'D': '#708090' },
+    pixels: [
+      '......AA',
+      '.....AA.',
+      '....AA..',
+      '...AA...',
+      '..AA....',
+      '.GAAG...',
+      '..GG....',
+      '..DD....',
+    ]
+  },
+  {
+    name: 'Shield',
+    glow: 'rgba(58, 111, 191, 0.08)',
+    palette: { 'B': '#3a6fbf', 'L': '#5a9fef', 'G': '#d4af37', 'D': '#2a4f8f' },
+    pixels: [
+      '.GBBBBG.',
+      'GBLLLLBG',
+      'BLLGGLLB',
+      'BLLGGLLB',
+      'BLLLLLLB',
+      '.BLLLLB.',
+      '..BDDB..',
+      '...BB...',
+    ]
+  },
+  {
+    name: 'Potion',
+    glow: 'rgba(233, 69, 96, 0.08)',
+    palette: { 'G': '#a0a0a0', 'R': '#e94560', 'P': '#ff6b8a', 'D': '#707070' },
+    pixels: [
+      '..GGGG..',
+      '...GG...',
+      '..GGGG..',
+      '.RRRRRR.',
+      '.RPPPPR.',
+      '.RPPPPR.',
+      '.RRRRRR.',
+      '..RRRR..',
+    ]
+  },
+  {
+    name: 'Key',
+    glow: 'rgba(212, 175, 55, 0.08)',
+    palette: { 'G': '#d4af37', 'D': '#a08030' },
+    pixels: [
+      '.GGGG...',
+      'G....G..',
+      'G....G..',
+      '.GGGGG..',
+      '...G....',
+      '...GG...',
+      '...G....',
+      '...GG...',
+    ]
+  },
+  {
+    name: 'Chest',
+    glow: 'rgba(139, 69, 19, 0.08)',
+    palette: { 'B': '#8b4513', 'L': '#cd853f', 'G': '#d4af37', 'D': '#5c2d00' },
+    pixels: [
+      '........',
+      '.BBBBBB.',
+      'BLLLLLLD',
+      'BLGGGLLB',
+      'BBBBBBBB',
+      'BLLLLLLD',
+      'BLLLLLLD',
+      'BDDDDDDB',
+    ]
+  },
+  {
+    name: 'Crown',
+    glow: 'rgba(255, 215, 0, 0.1)',
+    palette: { 'G': '#d4af37', 'Y': '#ffd700', 'R': '#e94560', 'D': '#a08030' },
+    pixels: [
+      'G..G..G.',
+      'GG.G.GG.',
+      'GGRGRGG.',
+      'GGGGGGG.',
+      'GYYYYYG.',
+      '.GGGGG..',
+      '........',
+      '........',
+    ]
+  },
+  {
+    name: 'Skull',
+    glow: 'rgba(224, 224, 224, 0.06)',
+    palette: { 'W': '#e0e0e0', 'B': '#2c2c2c', 'G': '#a0a0a0' },
+    pixels: [
+      '..WWWW..',
+      '.WWWWWW.',
+      'WBWWWBWW',
+      'WWWWWWWW',
+      'WWWGGWWW',
+      '.WGWWGW.',
+      '..WWWW..',
+      '........',
+    ]
+  },
+  {
+    name: 'Gem',
+    glow: 'rgba(100, 200, 255, 0.1)',
+    palette: { 'B': '#2196F3', 'L': '#64B5F6', 'D': '#1565C0', 'W': '#E3F2FD' },
+    pixels: [
+      '........',
+      '..BBBB..',
+      '.BWLLBB.',
+      'BWLLLBDB',
+      'BLLLDDB.',
+      '.BLDDB..',
+      '..BBB...',
+      '........',
+    ]
+  },
+  {
+    name: 'Mushroom',
+    glow: 'rgba(233, 69, 96, 0.08)',
+    palette: { 'R': '#e94560', 'W': '#f5f5f5', 'B': '#d4a574', 'D': '#8b6914' },
+    pixels: [
+      '..RRRR..',
+      '.RWRWRR.',
+      'RRWRRWRR',
+      'RRRRRRRR',
+      '..BBBB..',
+      '..BBBB..',
+      '..BBBB..',
+      '.DDDDDD.',
+    ]
+  },
+  {
+    name: 'Flame',
+    glow: 'rgba(255, 100, 0, 0.1)',
+    palette: { 'R': '#e94560', 'O': '#ff6600', 'Y': '#ffcc00', 'D': '#cc2200' },
+    pixels: [
+      '...OO...',
+      '..OYO...',
+      '..OYOO..',
+      '.OYYYO..',
+      '.OYYYO..',
+      '.ROYOR..',
+      '..RRR...',
+      '........',
+    ]
+  },
+];
+
+// ============================================
+// Renderer
+// ============================================
+let currentScale = 6;
+
+function renderAllIcons() {
+  const container = document.getElementById('icon-grid');
+  container.innerHTML = '';
+
+  ICONS.forEach(icon => {
+    const card = document.createElement('div');
+    card.className = 'icon-card';
+    card.style.setProperty('--glow', icon.glow);
+
+    const grid = document.createElement('div');
+    grid.className = 'pixel-grid';
+    grid.style.gridTemplateColumns = `repeat(8, ${currentScale}px)`;
+
+    for (const row of icon.pixels) {
+      for (let x = 0; x < 8; x++) {
+        const ch = row[x] || '.';
+        const px = document.createElement('div');
+        px.style.width = currentScale + 'px';
+        px.style.height = currentScale + 'px';
+        px.style.background = icon.palette[ch] || 'transparent';
+        grid.appendChild(px);
+      }
+    }
+
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = icon.name;
+
+    card.appendChild(grid);
+    card.appendChild(label);
+    container.appendChild(card);
+  });
+}
+
+renderAllIcons();
+
+// ============================================
+// Scale controls
+// ============================================
+document.querySelectorAll('.controls button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentScale = parseInt(btn.dataset.scale);
+    renderAllIcons();
+  });
+});
+</script>
+</body>
+</html>
