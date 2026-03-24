@@ -83,21 +83,32 @@ Two inputs: **size** + **prompt**. That's the entire interface.
 
 ### Characters & Scenes
 
-| Demo | Size | Highlights | File |
-|------|------|-----------|------|
-| **Swordsman** | 16×24 | Moonlit night, cherry blossoms, sword gleam, wind effects | `swordsman.html` |
-| **Cyberpunk Girl** | 32×32 | Neon rain, cyber eye glow, flickering signs, hair physics | `cyberpunk.html` |
-| **Fire Dragon** | 24×24 | Ember particles, fire breath, lava cracks, scale shimmer | `dragon.html` |
-| **Pixel Icons** | 8×8 | 12 game icons, adjustable scale (4x–10x), hover bounce | `icons.html` |
-| **Avatar Gallery** | 8–32px | Multi-size showcase, CSS & Grid rendering, scale controls | `index.html` |
+<table>
+<tr>
+<td align="center"><b>Swordsman</b><br><sub>16×24 · Moonlit scene</sub><br><img src="assets/swordsman.png" width="380"></td>
+<td align="center"><b>Cyberpunk Girl</b><br><sub>32×32 · Neon rain</sub><br><img src="assets/cyberpunk.png" width="380"></td>
+</tr>
+<tr>
+<td align="center"><b>Fire Dragon</b><br><sub>24×24 · Ember particles</sub><br><img src="assets/dragon.png" width="380"></td>
+<td align="center"><b>Pixel Icons</b><br><sub>8×8 · 12 game icons</sub><br><img src="assets/icons.png" width="380"></td>
+</tr>
+</table>
 
 ### Procedural Generators
 
-| Demo | Resolution | Highlights | File |
-|------|-----------|-----------|------|
-| **Landscape Generator** | Up to 256×144 | FBM noise, 5 biomes (mountain/starry/sakura/neon/desert), water animation | `landscape.html` |
-| **World Wonders** | Up to 256×144 | 8 landmarks: Pyramids, Great Wall, Forbidden City, Taj Mahal, Eiffel Tower, Colosseum, Angkor Wat, Stonehenge | `wonders.html` |
-| **Full Showcase** | All sizes | Everything on one scrollable page with navigation | `showcase.html` |
+<table>
+<tr>
+<td align="center"><b>Landscape Generator</b><br><sub>FBM noise · 5 biomes · up to 256×144</sub><br><img src="assets/landscape.png" width="380"></td>
+<td align="center"><b>World Wonders</b><br><sub>8 landmarks · Pyramids, Great Wall, Taj Mahal...</sub><br><img src="assets/wonders.png" width="380"></td>
+</tr>
+</table>
+
+### Multi-Size Gallery
+
+<p align="center">
+<img src="assets/gallery.png" width="700">
+</p>
+<p align="center"><sub>8×8 icons → 12×12 sprites → 16×16 avatars → 24×24 characters → 32×32 detailed</sub></p>
 
 ---
 
