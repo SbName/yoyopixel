@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://sbname.github.io/yoyopixel/showcase.html"><img src="https://img.shields.io/badge/Live_Demo-Try_It-e94560?style=flat-square" alt="Live Demo"></a>
   <a href="#install-as-claude-code-skill"><img src="https://img.shields.io/badge/Claude_Code-Skill-00c8ff?style=flat-square" alt="Claude Code"></a>
   <a href="pixelart-skill.md"><img src="https://img.shields.io/badge/MCP-Compatible-00ff88?style=flat-square" alt="MCP"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-d4af37?style=flat-square" alt="MIT"></a>
@@ -79,7 +80,13 @@ Two inputs: **size** + **prompt**. That's the entire interface.
 
 ## Showcases
 
-> Open any `.html` file in a browser. No build step needed.
+> **[Live Demo](https://sbname.github.io/yoyopixel/showcase.html)** — try all demos online, no download needed.
+
+| Page | Link |
+|------|------|
+| All-in-one Showcase | [sbname.github.io/yoyopixel/showcase.html](https://sbname.github.io/yoyopixel/showcase.html) |
+| Landscape Generator | [sbname.github.io/yoyopixel/landscape.html](https://sbname.github.io/yoyopixel/landscape.html) |
+| World Wonders | [sbname.github.io/yoyopixel/wonders.html](https://sbname.github.io/yoyopixel/wonders.html) |
 
 ### Characters & Scenes
 
