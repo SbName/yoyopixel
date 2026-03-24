@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/PixelAI-Pure_Code_Pixel_Art-e94560?style=for-the-badge&labelColor=1a1a2e" alt="PixelAI">
+  <img src="https://img.shields.io/badge/YoYoPixel-Pure_Code_Pixel_Art-e94560?style=for-the-badge&labelColor=1a1a2e" alt="YoYoPixel">
 </p>
 
-<h3 align="center">Pure-code pixel art generator for AI agents</h3>
+<h3 align="center">Pixel art without GPU. Any LLM can draw.</h3>
 
 <p align="center">
-  No images. No dependencies. Just HTML + CSS + JS.<br>
-  <b>Input: size + prompt → Output: self-contained HTML</b>
+  No GPU. No image model. No multimodal. No dependencies.<br>
+  <b>Any text-only LLM + size + prompt → pixel art HTML</b>
 </p>
 
 <p align="center">
@@ -17,9 +17,16 @@
 
 ---
 
-## What is PixelAI?
+## What is YoYoPixel?
 
-A pixel art generation system that AI agents (Claude Code, OpenClaw, MCP tools) can use as a **skill**. Give it a size and a description, it outputs a complete, animated, self-contained HTML file.
+**Text-only LLMs can generate images — no GPU, no DALL-E, no multimodal model needed.**
+
+YoYoPixel is a skill/prompt framework that teaches any LLM (Claude, GPT, Gemini, Llama, Qwen...) to generate pixel art as pure HTML/CSS/JS code. The LLM writes structured text data, the browser renders it as pixel art.
+
+```
+Traditional: prompt → GPU → image model → PNG
+YoYoPixel:   prompt → any text LLM → HTML code → pixel art in browser
+```
 
 ```
 /pixelart 32x32, a wizard with a glowing staff
@@ -45,16 +52,16 @@ The AI auto-decides everything: palette, detail level, rendering method, shading
 
 ```bash
 # Clone
-git clone https://github.com/SbName/pixelai.git
+git clone https://github.com/SbName/yoyopixel.git
 
 # Copy skill into your project
-cp -r pixelai/.claude/skills/pixelart YOUR_PROJECT/.claude/skills/
+cp -r yoyopixel/.claude/skills/pixelart YOUR_PROJECT/.claude/skills/
 ```
 
 ### Option 2: Global (all projects)
 
 ```bash
-cp -r pixelai/.claude/skills/pixelart ~/.claude/skills/
+cp -r yoyopixel/.claude/skills/pixelart ~/.claude/skills/
 ```
 
 ### Use it
