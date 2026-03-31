@@ -164,6 +164,64 @@ function ditherColor(x, y, c1, c2, ratio) { /* pick c1 or c2 based on threshold 
 | blink   | Eye pixels opacity toggle, 4s cycle                         |
 | glow    | `box-shadow` pulse on emissive pixels                       |
 
+---
+
+## Pixel Font Reference (MUST USE for text/numbers)
+
+When drawing text, numbers, or symbols, do NOT guess pixel placement. Use these exact patterns.
+
+### 3×5 Digits (0-9)
+
+```
+0: ###  1: .#.  2: ###  3: ###  4: #.#  5: ###  6: ###  7: ###  8: ###  9: ###
+   #.#     ##.     ..#     ..#     #.#     #..     #..     ..#     #.#     #.#
+   #.#     .#.     ###     .##     ###     ###     ###     .#.     ###     ###
+   #.#     .#.     #..     ..#     ..#     ..#     #.#     .#.     #.#     ..#
+   ###     ###     ###     ###     ..#     ###     ###     .#.     ###     ###
+```
+
+### 3×5 Letters (A-Z)
+
+```
+A: .#.  B: ##.  C: ###  D: ##.  E: ###  F: ###  G: ###  H: #.#  I: ###  J: .##
+   #.#     #.#     #..     #.#     #..     #..     #..     #.#     .#.     ..#
+   ###     ##.     #..     #.#     ###     ##.     #.#     ###     .#.     ..#
+   #.#     #.#     #..     #.#     #..     #..     #.#     #.#     .#.     #.#
+   #.#     ##.     ###     ##.     ###     #..     ###     #.#     ###     ##.
+
+K: #.#  L: #..  M: #.#  N: #.#  O: ###  P: ###  Q: ###  R: ##.  S: ###  T: ###
+   #.#     #..     ###     ##.     #.#     #.#     #.#     #.#     #..     .#.
+   ##.     #..     ###     #.#     #.#     ###     #.#     ##.     ###     .#.
+   #.#     #..     #.#     #.#     #.#     #..     #.#     #.#     ..#     .#.
+   #.#     ###     #.#     #.#     ###     #..     ##.     #.#     ###     .#.
+
+U: #.#  V: #.#  W: #.#  X: #.#  Y: #.#  Z: ###
+   #.#     #.#     #.#     .#.     #.#     ..#
+   #.#     #.#     ###     .#.     .#.     .#.
+   #.#     .#.     ###     .#.     .#.     #..
+   ###     .#.     #.#     #.#     .#.     ###
+```
+
+### 5×7 Digits (larger, more readable)
+
+```
+0: .###.  1: ..#..  2: .###.  3: .###.  4: #..#.  5: #####  6: .###.  7: #####  8: .###.  9: .###.
+   #...#     .##..     #...#     #...#     #..#.     #....     #....     ....#     #...#     #...#
+   #...#     ..#..     ....#     ....#     #..#.     #....     #....     ...#.     #...#     #...#
+   #...#     ..#..     .###.     ..##.     #####     ####.     ####.     ..#..     .###.     .####
+   #...#     ..#..     #....     ....#     ...#.     ....#     #...#     ..#..     #...#     ....#
+   #...#     ..#..     #....     #...#     ...#.     #...#     #...#     .#...     #...#     #...#
+   .###.     .###.     #####     .###.     ...#.     .###.     .###.     .#...     .###.     .###.
+```
+
+### Usage rules for text in pixel art:
+1. **Always copy from the reference above** — never approximate
+2. Use 3×5 for small art (≤16px canvas), 5×7 for larger (≥24px)
+3. Leave 1px gap between characters
+4. Align to pixel grid — no half-pixel offsets
+
+---
+
 ### Atmosphere Implementation
 
 | Element | CSS/JS                                                     |

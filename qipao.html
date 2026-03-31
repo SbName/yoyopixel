@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Red Qipao Girl · Pixel Art</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 100vw; height: 100vh; overflow: hidden;
+    background: linear-gradient(180deg, #0a0010 0%, #1a0818 40%, #0a0008 100%);
+    font-family: 'Courier New', monospace;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative;
+  }
+
+  .character-wrap {
+    position: relative; z-index: 10;
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  .pixel-grid {
+    display: grid; gap: 0; image-rendering: pixelated;
+    animation: breathe 5s ease-in-out infinite;
+    filter: drop-shadow(0 0 20px rgba(200, 30, 30, 0.15));
+  }
+
+  @keyframes breathe {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+
+  .px {
+    opacity: 0;
+    animation: pixelIn 0.4s ease forwards;
+    transition: filter 0.3s;
+  }
+
+  @keyframes pixelIn { to { opacity: 1; } }
+
+  .char-shadow {
+    width: 80px; height: 10px;
+    background: radial-gradient(ellipse, rgba(200,30,30,0.15) 0%, transparent 70%);
+    margin-top: -2px;
+    animation: shadowPulse 5s ease-in-out infinite;
+  }
+
+  @keyframes shadowPulse {
+    0%, 100% { transform: scaleX(1); opacity: 0.5; }
+    50% { transform: scaleX(1.05); opacity: 0.7; }
+  }
+
+  /* Ambient particles */
+  .particle {
+    position: absolute;
+    width: var(--size);
+    height: var(--size);
+    background: var(--color);
+    border-radius: 50%;
+    opacity: 0;
+    pointer-events: none;
+    animation: floatUp var(--dur) ease-in-out infinite;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes floatUp {
+    0% { opacity: 0; transform: translateY(0) scale(1); }
+    20% { opacity: 0.6; }
+    80% { opacity: 0.3; }
+    100% { opacity: 0; transform: translateY(-30vh) scale(0.3); }
+  }
+
+  .title-area {
+    position: absolute; bottom: 4vh;
+    text-align: center; z-index: 20;
+  }
+
+  .title-cn {
+    font-size: 22px; letter-spacing: 12px;
+    color: #c83030;
+    text-shadow: 0 0 15px rgba(200,48,48,0.3);
+    margin-bottom: 4px;
+  }
+
+  .title-en {
+    font-size: 10px; letter-spacing: 5px;
+    color: #444; text-transform: uppercase;
+  }
+
+  .back-link {
+    position: absolute; top: 20px; left: 20px;
+    color: #333; text-decoration: none;
+    font-size: 13px; letter-spacing: 1px;
+    z-index: 30; transition: color 0.3s;
+  }
+  .back-link:hover { color: #c83030; }
+</style>
+</head>
+<body>
+
+<a href="showcase.html" class="back-link">&larr; Showcase</a>
+
+<div class="character-wrap">
+  <div id="character" class="pixel-grid"></div>
+  <div class="char-shadow"></div>
+</div>
+
+<div id="particles"></div>
+
+<div class="title-area">
+  <div class="title-cn">旗 袍</div>
+  <div class="title-en">Red Qipao · AI Pixel Art</div>
+</div>
+
+<script>
+// ============================================
+// Red Qipao Girl · 20×36 · Detailed
+// AI-interpreted pixel art from image reference
+// ============================================
+const CHARACTER = {
+  width: 20,
+  height: 36,
+  palette: {
+    '.': 'transparent',
+    // Hair
+    'H': '#0a0a18',   // darkest hair
+    'h': '#1a1a30',   // dark hair
+    'i': '#2a2a48',   // hair highlight
+    // Skin
+    'S': '#f0c8a0',   // skin base
+    's': '#d8a878',   // skin shadow
+    'B': '#f5dcc8',   // skin highlight
+    // Face details
+    'E': '#1a0808',   // eyes
+    'W': '#f0ece8',   // eye whites
+    'L': '#cc3333',   // lips
+    'l': '#a02828',   // lip shadow
+    // Dress
+    'R': '#b81818',   // red dress dark
+    'r': '#d02828',   // red dress mid
+    'O': '#e84040',   // red dress highlight
+    'o': '#f06060',   // red dress lightest
+    // Gold trim
+    'G': '#d4af37',   // gold bright
+    'g': '#a08020',   // gold dark
+    // Details
+    'D': '#151518',   // shoes
+    'N': '#2a1010',   // dark red shadow
+  },
+  pixels: [
+    // 01234567890123456789
+    '........hhhh........',  //  0 — top of hair
+    '.......hhhhhh.......',  //  1
+    '......hhhhhhhh......',  //  2
+    '.....hhhiiihhhhh....',  //  3 — highlights
+    '....hhhhhhhhhhhHh...',  //  4 — flowing right
+    '....hhhSSSSSShhHh...',  //  5 — forehead, clean
+    '....hhSSsSsSShhhh...',  //  6 — soft brow hint only
+    '...hhSSESSESSShhh...',  //  7 — two clean dot eyes
+    '...hhSSSSsSSSShHh...',  //  8 — tiny nose shadow
+    '....hhSSLLSSS..hh...',  //  9 — small red lips
+    '.....SSSSSSSS..hh...',  // 10 — clean chin
+    '......SsSSSS........',  // 11 — neck
+    '.....gGGgGGGgG......',  // 12 — gold mandarin collar
+    '.....SrRGGGRrS......',  // 13 — V-opening + gold
+    '....SrrRRRRRrrS.....',  // 14 — upper dress
+    '...SSrRRRRRRRrSS....',  // 15 — arms + dress
+    '....SrRROoORRrS.....',  // 16 — highlight on chest
+    '.....rRRRRRRRr......',  // 17 — dress body
+    '.....rRRRRRRRr......',  // 18
+    '......RRRRRRRR......',  // 19 — waist (narrowest)
+    '.....rRRRRRRRRr.....',  // 20 — hips widen
+    '.....RRRRRRRRRR.....',  // 21
+    '....RRRRRRRRRRR.....',  // 22
+    '....RRRRRSSRRRR.....',  // 23 — slit begins, skin
+    '....RRRRSSsRRRR.....',  // 24
+    '....RRRRSSs.RRRN....',  // 25 — slit widens
+    '.....RRRSSs.RRRN....',  // 26
+    '.....RRRSSs..RRN....',  // 27
+    '.....RRSSSs..RRN....',  // 28
+    '......RSSs...gRN....',  // 29 — gold frog button
+    '......SSSs...RRN....',  // 30
+    '......SSs....SSN....',  // 31 — legs
+    '.....SSs....SSS.....',  // 32
+    '.....SS......SS.....',  // 33
+    '....sSSs....sSS.....',  // 34 — ankles
+    '....DDDD...DDDD.....',  // 35 — shoes
+  ]
+};
+
+// ============================================
+// Render
+// ============================================
+const SCALE = 8;
+const grid = document.getElementById('character');
+grid.style.gridTemplateColumns = `repeat(${CHARACTER.width}, ${SCALE}px)`;
+
+const pixelElements = [];
+
+CHARACTER.pixels.forEach((row, y) => {
+  for (let x = 0; x < CHARACTER.width; x++) {
+    const ch = row[x] || '.';
+    const color = CHARACTER.palette[ch] || 'transparent';
+    const px = document.createElement('div');
+    px.className = 'px';
+    px.style.width = SCALE + 'px';
+    px.style.height = SCALE + 'px';
+    px.style.background = color;
+    px.style.animationDelay = (x * 0.015 + y * 0.025) + 's';
+    px.dataset.char = ch;
+    px.dataset.x = x;
+    px.dataset.y = y;
+    grid.appendChild(px);
+    pixelElements.push({ el: px, ch, x, y, baseColor: color });
+  }
+});
+
+// ============================================
+// Gold trim gleam
+// ============================================
+function goldGleam() {
+  const goldPx = pixelElements.filter(p =>
+    (p.ch === 'G' || p.ch === 'g') && p.baseColor !== 'transparent'
+  );
+  goldPx.sort((a, b) => a.x - b.x);
+  goldPx.forEach((p, i) => {
+    setTimeout(() => {
+      p.el.style.background = '#fff8d0';
+      p.el.style.boxShadow = '0 0 6px 2px rgba(212,175,55,0.6)';
+      setTimeout(() => {
+        p.el.style.background = p.baseColor;
+        p.el.style.boxShadow = 'none';
+      }, 250);
+    }, i * 60);
+  });
+}
+setTimeout(() => { goldGleam(); setInterval(goldGleam, 6000); }, 2000);
+
+// ============================================
+// Dress silk shimmer
+// ============================================
+const dressPx = pixelElements.filter(p =>
+  (p.ch === 'O' || p.ch === 'o' || p.ch === 'r') && p.baseColor !== 'transparent'
+);
+
+function silkShimmer() {
+  const time = Date.now() / 1000;
+  dressPx.forEach(p => {
+    const wave = Math.sin(time * 1.5 + p.x * 0.4 + p.y * 0.2);
+    const brightness = 1 + wave * 0.08;
+    p.el.style.filter = `brightness(${brightness})`;
+  });
+  requestAnimationFrame(silkShimmer);
+}
+setTimeout(silkShimmer, 1500);
+
+// ============================================
+// Hair wind
+// ============================================
+const hairPx = pixelElements.filter(p =>
+  (p.ch === 'h' || p.ch === 'i' || p.ch === 'H') &&
+  p.baseColor !== 'transparent' && p.x > 12 && p.y < 12
+);
+
+function hairWind() {
+  const time = Date.now() / 1000;
+  hairPx.forEach(p => {
+    const wave = Math.sin(time * 2 + p.x * 0.5 + p.y * 0.3);
+    const brightness = 1 + wave * 0.15;
+    p.el.style.filter = `brightness(${brightness})`;
+  });
+  requestAnimationFrame(hairWind);
+}
+setTimeout(hairWind, 1500);
+
+// ============================================
+// Ambient red particles
+// ============================================
+function createParticles() {
+  const container = document.getElementById('particles');
+  const colors = ['#ff404080', '#cc202060', '#ff606060', '#d4af3740'];
+  for (let i = 0; i < 15; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = 2 + Math.random() * 4;
+    p.style.setProperty('--size', size + 'px');
+    p.style.setProperty('--color', colors[Math.floor(Math.random() * colors.length)]);
+    p.style.setProperty('--dur', (6 + Math.random() * 8) + 's');
+    p.style.setProperty('--delay', (Math.random() * 10) + 's');
+    p.style.left = (20 + Math.random() * 60) + 'vw';
+    p.style.bottom = '5vh';
+    container.appendChild(p);
+  }
+}
+createParticles();
+</script>
+</body>
+</html>

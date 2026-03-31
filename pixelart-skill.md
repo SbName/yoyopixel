@@ -155,6 +155,32 @@ function ditherColor(x, y, c1, c2, ratio) { /* ordered dither between two colors
 - Leave transparent border for breathing room
 - Break perfect symmetry with details (hair, weapon, pose)
 
+### Pixel Font Reference (MUST USE for text/numbers)
+
+When drawing text, numbers, or symbols, **always copy from these patterns**. Never guess.
+
+**3×5 Digits:**
+```
+0: ###  1: .#.  2: ###  3: ###  4: #.#  5: ###  6: ###  7: ###  8: ###  9: ###
+   #.#     ##.     ..#     ..#     #.#     #..     #..     ..#     #.#     #.#
+   #.#     .#.     ###     .##     ###     ###     ###     .#.     ###     ###
+   #.#     .#.     #..     ..#     ..#     ..#     #.#     .#.     #.#     ..#
+   ###     ###     ###     ###     ..#     ###     ###     .#.     ###     ###
+```
+
+**5×7 Digits (for ≥24px canvas):**
+```
+0: .###.  1: ..#..  2: .###.  3: .###.  4: #..#.  5: #####  6: .###.  7: #####  8: .###.  9: .###.
+   #...#     .##..     #...#     #...#     #..#.     #....     #....     ....#     #...#     #...#
+   #...#     ..#..     ....#     ....#     #..#.     #....     #....     ...#.     #...#     #...#
+   #...#     ..#..     .###.     ..##.     #####     ####.     ####.     ..#..     .###.     .####
+   #...#     ..#..     #....     ....#     ...#.     ....#     #...#     ..#..     #...#     ....#
+   #...#     ..#..     #....     #...#     ...#.     #...#     #...#     .#...     #...#     #...#
+   .###.     .###.     #####     .###.     ...#.     .###.     .###.     .#...     .###.     .###.
+```
+
+Use 3×5 for small canvas (≤16px), 5×7 for larger. Always 1px gap between characters.
+
 ### Drawing Process
 
 1. Start with the **silhouette** — get the shape right first

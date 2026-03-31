@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YoYoPixel — Image to Pixel Art Converter</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    background: #08080f;
+    font-family: 'Courier New', monospace;
+    color: #ddd;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    letter-spacing: 6px;
+    color: #e94560;
+    text-shadow: 0 0 15px rgba(233,69,96,0.3);
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 11px;
+    color: #444;
+    letter-spacing: 2px;
+    margin-bottom: 24px;
+  }
+
+  .layout {
+    display: flex;
+    gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    flex-wrap: wrap;
+  }
+  .panel {
+    background: #10142a;
+    border: 1px solid #1a2040;
+    border-radius: 10px;
+    padding: 20px;
+    flex: 1;
+    min-width: 300px;
+  }
+  .panel h2 {
+    font-size: 13px;
+    color: #e94560;
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+
+  /* Drop zone */
+  .dropzone {
+    border: 2px dashed #2a3060;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: #e94560;
+    background: rgba(233,69,96,0.05);
+  }
+  .dropzone p { color: #555; font-size: 12px; letter-spacing: 1px; }
+  .dropzone input { display: none; }
+  .dropzone img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 4px;
+    margin-top: 10px;
+  }
+
+  /* Controls */
+  .ctrl-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .ctrl-row label {
+    font-size: 11px;
+    color: #666;
+    letter-spacing: 1px;
+    min-width: 70px;
+  }
+  .ctrl-row select, .ctrl-row input[type=range] {
+    background: #1a2040;
+    border: 1px solid #2a3060;
+    color: #aaa;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 3px;
+  }
+  .ctrl-row input[type=range] {
+    flex: 1;
+    max-width: 160px;
+    accent-color: #e94560;
+  }
+  .ctrl-row .val {
+    font-size: 11px;
+    color: #e94560;
+    min-width: 30px;
+  }
+
+  button.primary {
+    background: #e94560;
+    border: none;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    padding: 8px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  button.primary:hover { background: #ff5a78; }
+  button.primary:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+  button.secondary {
+    background: #1a3050;
+    border: 1px solid #2a5a8a;
+    color: #5a9fef;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  button.secondary:hover { background: #2a5a8a; color: #fff; }
+
+  /* Preview */
+  .preview-area {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+  .preview-box {
+    text-align: center;
+  }
+  .preview-box .label {
+    font-size: 10px;
+    color: #555;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid #1a2040;
+    border-radius: 4px;
+    background: #0a0a14;
+  }
+
+  /* Palette display */
+  .palette-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 12px;
+  }
+  .palette-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid #2a3060;
+    cursor: pointer;
+    position: relative;
+  }
+  .palette-swatch:hover::after {
+    content: attr(data-color);
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: #888;
+    white-space: nowrap;
+    background: #10142a;
+    padding: 2px 4px;
+    border-radius: 2px;
+    z-index: 10;
+  }
+
+  /* Code output */
+  .code-output {
+    background: #0a0c18;
+    border: 1px solid #1a2040;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 10px;
+    color: #888;
+    line-height: 1.5;
+    max-height: 400px;
+    overflow: auto;
+    white-space: pre;
+    margin-top: 12px;
+    tab-size: 2;
+  }
+
+  /* Options row */
+  .options-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #666;
+    cursor: pointer;
+  }
+  .toggle input { accent-color: #e94560; }
+
+  .back-link {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    color: #333;
+    text-decoration: none;
+    font-size: 12px;
+    letter-spacing: 1px;
+    z-index: 30;
+    transition: color 0.3s;
+  }
+  .back-link:hover { color: #e94560; }
+</style>
+</head>
+<body>
+
+<a href="showcase.html" class="back-link">&larr; Showcase</a>
+
+<h1>IMAGE TO PIXEL ART</h1>
+<div class="subtitle">Drop an image &middot; Adjust settings &middot; Export as YoYoPixel HTML</div>
+
+<div class="layout">
+  <!-- LEFT: Input -->
+  <div class="panel">
+    <h2>Input</h2>
+    <div class="dropzone" id="dropzone">
+      <p>Drop image here or click to upload</p>
+      <input type="file" id="file-input" accept="image/*">
+      <img id="preview-img" style="display:none">
+    </div>
+
+    <div class="ctrl-row">
+      <label>Width</label>
+      <input type="range" id="width-slider" min="8" max="128" value="32" step="1">
+      <span class="val" id="width-val">32</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Height</label>
+      <input type="range" id="height-slider" min="8" max="128" value="48" step="1">
+      <span class="val" id="height-val">48</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Colors</label>
+      <input type="range" id="colors-slider" min="4" max="32" value="16" step="1">
+      <span class="val" id="colors-val">16</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Scale</label>
+      <select id="scale-select">
+        <option value="2">2x</option>
+        <option value="4" selected>4x</option>
+        <option value="6">6x</option>
+        <option value="8">8x</option>
+      </select>
+    </div>
+
+    <div class="options-row">
+      <label class="toggle"><input type="checkbox" id="dither-check"> Dithering</label>
+      <label class="toggle"><input type="checkbox" id="outline-check"> Edge enhance</label>
+      <label class="toggle"><input type="checkbox" id="transparent-check" checked> Transparent BG</label>
+    </div>
+
+    <button class="primary" id="convert-btn" disabled>Convert</button>
+  </div>
+
+  <!-- MIDDLE: Preview -->
+  <div class="panel" style="flex:1.5">
+    <h2>Preview</h2>
+    <div class="preview-area">
+      <div class="preview-box">
+        <div class="label">PIXEL ART</div>
+        <canvas id="pixel-canvas"></canvas>
+      </div>
+      <div class="preview-box">
+        <div class="label">ORIGINAL (resized)</div>
+        <canvas id="original-canvas"></canvas>
+      </div>
+    </div>
+    <div>
+      <div class="label" style="font-size:10px;color:#555;margin-top:16px;letter-spacing:1px;">PALETTE</div>
+      <div class="palette-display" id="palette-display"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Output -->
+  <div class="panel">
+    <h2>Export</h2>
+    <button class="secondary" id="export-html-btn" disabled>Download HTML</button>
+    <button class="secondary" id="export-png-btn" disabled>Download PNG</button>
+    <button class="secondary" id="copy-data-btn" disabled>Copy Data (JS)</button>
+    <div class="code-output" id="code-output">// Upload an image to get started...</div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// Image to Pixel Art Converter
+// ================================================================
+
+let sourceImage = null;
+let pixelData = null; // { width, height, palette, pixels, charMap }
+
+// ======== Median-Cut Color Quantization ========
+function quantizeColors(pixels, maxColors) {
+  // Collect unique non-transparent colors
+  const colorMap = new Map();
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i+3] < 128) continue; // skip transparent
+    const key = (pixels[i] << 16) | (pixels[i+1] << 8) | pixels[i+2];
+    colorMap.set(key, (colorMap.get(key) || 0) + 1);
+  }
+
+  let buckets = [Array.from(colorMap.entries()).map(([k, count]) => ({
+    r: (k >> 16) & 0xff, g: (k >> 8) & 0xff, b: k & 0xff, count
+  }))];
+
+  // Split buckets until we have enough
+  while (buckets.length < maxColors) {
+    // Find bucket with largest range
+    let bestIdx = 0, bestRange = -1;
+    buckets.forEach((bucket, idx) => {
+      if (bucket.length < 2) return;
+      const ranges = ['r','g','b'].map(ch => {
+        const vals = bucket.map(c => c[ch]);
+        return Math.max(...vals) - Math.min(...vals);
+      });
+      const maxR = Math.max(...ranges);
+      if (maxR > bestRange) { bestRange = maxR; bestIdx = idx; }
+    });
+
+    if (bestRange <= 0) break;
+
+    const bucket = buckets[bestIdx];
+    // Find channel with largest range
+    const ranges = ['r','g','b'].map(ch => {
+      const vals = bucket.map(c => c[ch]);
+      return Math.max(...vals) - Math.min(...vals);
+    });
+    const splitCh = ['r','g','b'][ranges.indexOf(Math.max(...ranges))];
+
+    bucket.sort((a, b) => a[splitCh] - b[splitCh]);
+    const mid = Math.floor(bucket.length / 2);
+    buckets.splice(bestIdx, 1, bucket.slice(0, mid), bucket.slice(mid));
+  }
+
+  // Average each bucket to get palette color
+  return buckets.map(bucket => {
+    if (bucket.length === 0) return { r: 0, g: 0, b: 0 };
+    let totalW = 0, rSum = 0, gSum = 0, bSum = 0;
+    bucket.forEach(c => {
+      totalW += c.count;
+      rSum += c.r * c.count;
+      gSum += c.g * c.count;
+      bSum += c.b * c.count;
+    });
+    return {
+      r: Math.round(rSum / totalW),
+      g: Math.round(gSum / totalW),
+      b: Math.round(bSum / totalW),
+    };
+  }).filter(c => c);
+}
+
+function closestColor(r, g, b, palette) {
+  let best = 0, bestDist = Infinity;
+  palette.forEach((c, i) => {
+    // Weighted Euclidean (perceptual)
+    const dr = r - c.r, dg = g - c.g, db = b - c.b;
+    const dist = dr*dr*0.299 + dg*dg*0.587 + db*db*0.114;
+    if (dist < bestDist) { bestDist = dist; best = i; }
+  });
+  return best;
+}
+
+// ======== Bayer Dithering ========
+const BAYER4 = [
+  [ 0, 8, 2,10],
+  [12, 4,14, 6],
+  [ 3,11, 1, 9],
+  [15, 7,13, 5],
+];
+
+function ditherPixel(x, y, r, g, b, palette) {
+  const threshold = (BAYER4[y % 4][x % 4] / 16 - 0.5) * 48;
+  return closestColor(
+    Math.max(0, Math.min(255, r + threshold)),
+    Math.max(0, Math.min(255, g + threshold)),
+    Math.max(0, Math.min(255, b + threshold)),
+    palette
+  );
+}
+
+// ======== Edge Enhancement (simple Sobel) ========
+function edgeEnhance(imageData, w, h) {
+  const src = new Uint8ClampedArray(imageData.data);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = (y * w + x) * 4;
+      // Luminance of neighbors
+      const lum = (ox, oy) => {
+        const j = ((y+oy) * w + (x+ox)) * 4;
+        return src[j] * 0.299 + src[j+1] * 0.587 + src[j+2] * 0.114;
+      };
+      // Sobel
+      const gx = -lum(-1,-1) + lum(1,-1) - 2*lum(-1,0) + 2*lum(1,0) - lum(-1,1) + lum(1,1);
+      const gy = -lum(-1,-1) - 2*lum(0,-1) - lum(1,-1) + lum(-1,1) + 2*lum(0,1) + lum(1,1);
+      const edge = Math.sqrt(gx*gx + gy*gy);
+      // Sharpen
+      const factor = Math.min(edge / 200, 0.5);
+      imageData.data[i]   = Math.max(0, Math.min(255, src[i]   - factor * 30));
+      imageData.data[i+1] = Math.max(0, Math.min(255, src[i+1] - factor * 30));
+      imageData.data[i+2] = Math.max(0, Math.min(255, src[i+2] - factor * 30));
+    }
+  }
+}
+
+// ======== Convert ========
+function convert() {
+  if (!sourceImage) return;
+
+  const targetW = parseInt(document.getElementById('width-slider').value);
+  const targetH = parseInt(document.getElementById('height-slider').value);
+  const maxColors = parseInt(document.getElementById('colors-slider').value);
+  const scale = parseInt(document.getElementById('scale-select').value);
+  const useDither = document.getElementById('dither-check').checked;
+  const useEdge = document.getElementById('outline-check').checked;
+  const useTransparent = document.getElementById('transparent-check').checked;
+
+  // Draw source image at target resolution
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width = targetW;
+  tmpCanvas.height = targetH;
+  const tmpCtx = tmpCanvas.getContext('2d');
+  tmpCtx.imageSmoothingEnabled = true;
+  tmpCtx.imageSmoothingQuality = 'medium';
+  tmpCtx.drawImage(sourceImage, 0, 0, targetW, targetH);
+
+  const imageData = tmpCtx.getImageData(0, 0, targetW, targetH);
+
+  // Edge enhance
+  if (useEdge) edgeEnhance(imageData, targetW, targetH);
+
+  // Show original resized
+  const origCanvas = document.getElementById('original-canvas');
+  origCanvas.width = targetW * scale;
+  origCanvas.height = targetH * scale;
+  const origCtx = origCanvas.getContext('2d');
+  origCtx.imageSmoothingEnabled = false;
+  tmpCtx.putImageData(imageData, 0, 0);
+  origCtx.drawImage(tmpCanvas, 0, 0, targetW * scale, targetH * scale);
+
+  // Quantize palette
+  const palette = quantizeColors(imageData.data, maxColors);
+
+  // Map characters
+  const CHARS = '.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const charMap = {};
+  const paletteHex = {};
+
+  // '.' reserved for transparent
+  palette.forEach((c, i) => {
+    const ch = CHARS[i + 1]; // skip '.'
+    if (!ch) return;
+    const hex = '#' + [c.r, c.g, c.b].map(v => v.toString(16).padStart(2, '0')).join('');
+    charMap[i] = ch;
+    paletteHex[ch] = hex;
+  });
+
+  // Build pixel rows
+  const rows = [];
+  const pixCanvas = document.getElementById('pixel-canvas');
+  pixCanvas.width = targetW * scale;
+  pixCanvas.height = targetH * scale;
+  const pixCtx = pixCanvas.getContext('2d');
+
+  for (let y = 0; y < targetH; y++) {
+    let row = '';
+    for (let x = 0; x < targetW; x++) {
+      const i = (y * targetW + x) * 4;
+      const r = imageData.data[i], g = imageData.data[i+1], b = imageData.data[i+2], a = imageData.data[i+3];
+
+      if (useTransparent && a < 128) {
+        row += '.';
+        // Don't draw (transparent)
+        continue;
+      }
+
+      const ci = useDither
+        ? ditherPixel(x, y, r, g, b, palette)
+        : closestColor(r, g, b, palette);
+
+      const ch = charMap[ci] || '.';
+      row += ch;
+
+      // Draw pixel
+      const c = palette[ci];
+      pixCtx.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
+      pixCtx.fillRect(x * scale, y * scale, scale, scale);
+    }
+    rows.push(row);
+  }
+
+  pixelData = { width: targetW, height: targetH, palette: paletteHex, pixels: rows, scale };
+
+  // Show palette swatches
+  const palDisplay = document.getElementById('palette-display');
+  palDisplay.innerHTML = '';
+  Object.entries(paletteHex).forEach(([ch, hex]) => {
+    const swatch = document.createElement('div');
+    swatch.className = 'palette-swatch';
+    swatch.style.background = hex;
+    swatch.dataset.color = `${ch}: ${hex}`;
+    swatch.title = `${ch}: ${hex}`;
+    palDisplay.appendChild(swatch);
+  });
+
+  // Show code
+  const code = generateCode();
+  document.getElementById('code-output').textContent = code;
+
+  // Enable export buttons
+  document.getElementById('export-html-btn').disabled = false;
+  document.getElementById('export-png-btn').disabled = false;
+  document.getElementById('copy-data-btn').disabled = false;
+}
+
+// ======== Generate Code ========
+function generateCode() {
+  if (!pixelData) return '';
+  const { width, height, palette, pixels, scale } = pixelData;
+
+  let paletteStr = "    '.': 'transparent',\n";
+  Object.entries(palette).forEach(([ch, hex]) => {
+    paletteStr += `    '${ch}': '${hex}',\n`;
+  });
+
+  let pixelsStr = pixels.map(r => `    '${r}',`).join('\n');
+
+  return `const ART = {
+  name: 'Converted',
+  width: ${width},
+  height: ${height},
+  scale: ${scale},
+  palette: {\n${paletteStr}  },
+  pixels: [\n${pixelsStr}\n  ]
+};`;
+}
+
+// ======== Generate full HTML ========
+function generateHTML() {
+  if (!pixelData) return '';
+  const { width, height, palette, pixels, scale } = pixelData;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Art</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:#1a1a2e; font-family:'Courier New',monospace; }
+  .pixel-grid { display:grid; gap:0; image-rendering:pixelated;
+    grid-template-columns: repeat(${width}, ${scale}px); }
+  .px { width:${scale}px; height:${scale}px; }
+</style>
+</head>
+<body>
+<div class="pixel-grid" id="art"></div>
+<script>
+${generateCode()}
+
+const grid = document.getElementById('art');
+for (const row of ART.pixels) {
+  for (let x = 0; x < ART.width; x++) {
+    const ch = row[x] || '.';
+    const px = document.createElement('div');
+    px.className = 'px';
+    px.style.background = ART.palette[ch] || 'transparent';
+    grid.appendChild(px);
+  }
+}
+<\/script>
+</body>
+</html>`;
+}
+
+// ======== UI Events ========
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const previewImg = document.getElementById('preview-img');
+const convertBtn = document.getElementById('convert-btn');
+
+function loadImage(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      sourceImage = img;
+      previewImg.src = e.target.result;
+      previewImg.style.display = 'block';
+      dropzone.querySelector('p').textContent = `${img.width}×${img.height} loaded`;
+      convertBtn.disabled = false;
+
+      // Auto-set aspect ratio
+      const aspect = img.width / img.height;
+      const w = parseInt(document.getElementById('width-slider').value);
+      document.getElementById('height-slider').value = Math.round(w / aspect);
+      document.getElementById('height-val').textContent = Math.round(w / aspect);
+
+      convert();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => { if (e.target.files[0]) loadImage(e.target.files[0]); });
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]);
+});
+
+// Sliders
+['width-slider', 'height-slider', 'colors-slider'].forEach(id => {
+  const slider = document.getElementById(id);
+  const val = document.getElementById(id.replace('slider', 'val'));
+  slider.addEventListener('input', () => { val.textContent = slider.value; if (sourceImage) convert(); });
+});
+
+document.getElementById('scale-select').addEventListener('change', () => { if (sourceImage) convert(); });
+document.getElementById('dither-check').addEventListener('change', () => { if (sourceImage) convert(); });
+document.getElementById('outline-check').addEventListener('change', () => { if (sourceImage) convert(); });
+document.getElementById('transparent-check').addEventListener('change', () => { if (sourceImage) convert(); });
+
+convertBtn.addEventListener('click', convert);
+
+// Export
+document.getElementById('export-html-btn').addEventListener('click', () => {
+  const html = generateHTML();
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'pixel-art.html'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('export-png-btn').addEventListener('click', () => {
+  const canvas = document.getElementById('pixel-canvas');
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'pixel-art.png'; a.click();
+});
+
+document.getElementById('copy-data-btn').addEventListener('click', () => {
+  navigator.clipboard.writeText(generateCode());
+  const btn = document.getElementById('copy-data-btn');
+  const orig = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = orig, 1500);
+});
+</script>
+</body>
+</html>
