@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Procedural Pixel Art Engine · Style Gallery</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;gap:32px;
+    background:#0e0e1a;font-family:'Courier New',monospace;color:#888;
+    padding:40px 20px;
+  }
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges}
+  h1{font-size:16px;letter-spacing:3px;color:#aaa}
+  .gallery{display:flex;gap:32px;align-items:flex-end;flex-wrap:wrap;justify-content:center}
+  .card{
+    text-align:center;background:#12122a;border:1px solid #222244;
+    border-radius:8px;padding:16px 16px 12px;
+    transition:border-color .3s;
+  }
+  .card:hover{border-color:#e94560}
+  .card h2{font-size:12px;color:#666;letter-spacing:2px;margin-top:10px}
+  .card .tags{margin-top:6px}
+  .tag{
+    display:inline-block;background:#1a1a3e;color:#5a5a8a;
+    padding:1px 6px;border-radius:3px;font-size:9px;margin:1px;
+  }
+  .note{font-size:11px;color:#444;max-width:700px;text-align:center;line-height:1.8}
+  /* sparkle particles for tower */
+  .spark-wrap{position:relative;display:inline-block}
+  .spark{
+    position:absolute;width:2px;height:2px;border-radius:50%;
+    background:#fff;opacity:0;
+    animation:sparkle 3s ease-in-out infinite;
+  }
+  @keyframes sparkle{
+    0%,100%{opacity:0;transform:translateY(0) scale(.5)}
+    50%{opacity:.8;transform:translateY(-8px) scale(1)}
+  }
+</style>
+</head>
+<body>
+
+<h1>PROCEDURAL ENGINE &middot; STYLE GALLERY</h1>
+
+<div class="gallery">
+  <div class="card">
+    <div class="spark-wrap">
+      <canvas id="tower"></canvas>
+      <div class="spark" style="left:30%;top:45%;animation-delay:0s"></div>
+      <div class="spark" style="left:65%;top:35%;animation-delay:1.2s"></div>
+      <div class="spark" style="left:45%;top:20%;animation-delay:2.4s"></div>
+      <div class="spark" style="left:25%;top:55%;animation-delay:0.7s"></div>
+      <div class="spark" style="left:70%;top:50%;animation-delay:1.9s"></div>
+    </div>
+    <h2>WIZARD TOWER</h2>
+    <div class="tags">
+      <span class="tag">Dark Stone</span><span class="tag">Magic Glow</span><span class="tag">Conical Roof</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="tree"></canvas>
+    <h2>SAKURA TREE</h2>
+    <div class="tags">
+      <span class="tag">Bark Cracks</span><span class="tag">Blossom Canopy</span><span class="tag">Multi-blob</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="chest"></canvas>
+    <h2>TREASURE CHEST</h2>
+    <div class="tags">
+      <span class="tag">Wood Plank</span><span class="tag">Metal Band</span><span class="tag">Gold Pile</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <canvas id="well"></canvas>
+    <h2>VILLAGE WELL</h2>
+    <div class="tags">
+      <span class="tag">Cobblestone</span><span class="tag">Rope Texture</span><span class="tag">Water Surface</span>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  Same engine, different palettes &amp; regions &rarr; completely different styles.<br>
+  All textures are procedurally generated. Zero hand-placed pixels for surfaces.
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ================================================================
+//  SHARED ENGINE (same as cottage prototype)
+// ================================================================
+class PB {
+  constructor(w,h){this.w=w;this.h=h;this.rgb=new Uint8ClampedArray(w*h*3);this.mask=new Uint8Array(w*h)}
+  set(x,y,r,g,b){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return;const i=(y*this.w+x)*3;this.rgb[i]=r;this.rgb[i+1]=g;this.rgb[i+2]=b;this.mask[y*this.w+x]=1}
+  setC(x,y,c){this.set(x,y,c[0],c[1],c[2])}
+  get(x,y){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return null;if(!this.mask[y*this.w+x])return null;const i=(y*this.w+x)*3;return[this.rgb[i],this.rgb[i+1],this.rgb[i+2]]}
+  has(x,y){x|=0;y|=0;return x>=0&&x<this.w&&y>=0&&y<this.h&&this.mask[y*this.w+x]===1}
+}
+
+function H(x,y){let n=((x|0)*374761393+(y|0)*668265263+1013904223)|0;n=(((n>>13)^n)*1274126177)|0;return(((n>>16)^n)>>>0)/4294967296}
+function hex(s){return[parseInt(s.slice(1,3),16),parseInt(s.slice(3,5),16),parseInt(s.slice(5,7),16)]}
+function dk(c,a){return c.map(v=>Math.max(0,(v*(1-a))|0))}
+function lt(c,a){return c.map(v=>Math.min(255,(v+(255-v)*a)|0))}
+function nz(c,x,y,r){const n=(H(x*7,y*13)-.5)*r;return c.map(v=>Math.max(0,Math.min(255,(v+n)|0)))}
+function pk(arr,x,y){return[...arr[Math.floor(H(x,y)*arr.length)%arr.length]]}
+function lerp(a,b,t){return a.map((v,i)=>Math.max(0,Math.min(255,(v+(b[i]-v)*t)|0)))}
+
+function inTri(px,py,x1,y1,x2,y2,x3,y3){
+  const d1=(px-x2)*(y1-y2)-(x1-x2)*(py-y2),d2=(px-x3)*(y2-y3)-(x2-x3)*(py-y3),d3=(px-x1)*(y3-y1)-(x3-x1)*(py-y1);
+  return!((d1<0||d2<0||d3<0)&&(d1>0||d2>0||d3>0))
+}
+
+// ---- Texture generators ----
+function texStone(pb,x1,y1,x2,y2,pal,csz,mw,mc){
+  mc=mc||[50,52,58];
+  const centers=[];const cols=Math.ceil((x2-x1)/csz)+2,rows=Math.ceil((y2-y1)/csz)+2;
+  for(let gy=-1;gy<=rows;gy++)for(let gx=-1;gx<=cols;gx++)
+    centers.push({x:x1+(gx+.5)*csz+(H(gx+111,gy+222)-.5)*csz*.65,y:y1+(gy+.5)*csz+(H(gx+333,gy+444)-.5)*csz*.5,c:Math.floor(H(gx+555,gy+666)*pal.length)%pal.length});
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){
+    let d1=1e9,d2=1e9,ni=0;
+    for(let i=0;i<centers.length;i++){const d=Math.abs(x-centers[i].x)*1.05+Math.abs(y-centers[i].y)*.9;if(d<d1){d2=d1;d1=d;ni=i}else if(d<d2)d2=d}
+    const edge=d2-d1;
+    if(edge<mw)pb.setC(x,y,nz([...mc],x,y,8));
+    else{let c=nz([...pal[centers[ni].c]],x,y,10);if(edge<mw+1.5)c=dk(c,.12*(1-(edge-mw)/1.5));pb.setC(x,y,c)}
+  }
+}
+
+function texTiles(pb,test,x1,y1,x2,y2,pal,tw,th){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){
+    if(!test(x,y))continue;
+    const row=Math.floor((y-y1)/th),off=(row&1)*(tw>>1);
+    const tx=(((x-x1+off)%tw)+tw)%tw,ty=(y-y1)%th,col=Math.floor((x-x1+off)/tw);
+    let c=[...pal[Math.floor(H(row*97+col,row*31+77)*pal.length)%pal.length]];
+    if(ty>=th-1)c=dk(c,.32);else if(ty===0)c=lt(c,.06);
+    if(tx===0||tx===tw-1)c=dk(c,.08);
+    pb.setC(x,y,nz(c,x,y,5));
+  }
+}
+
+function texWood(pb,x1,y1,x2,y2,pal,dir){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){
+    const t=dir==='v'?(x-x1)/Math.max(1,x2-x1):(y-y1)/Math.max(1,y2-y1);
+    const grain=Math.sin(t*12+H(0,Math.floor((dir==='v'?y:x)/2))*2)*.5+.5;
+    const ci=Math.min(pal.length-1,Math.floor(grain*pal.length));
+    pb.setC(x,y,nz([...pal[ci]],x,y,8));
+  }
+}
+
+function texFoliage(pb,cx,cy,rx,ry,palL,palD,density){
+  density=density||.8;
+  for(let y=cy-ry-1;y<=cy+ry+1;y++)for(let x=cx-rx-1;x<=cx+rx+1;x++){
+    const dx=(x-cx)/rx,dy=(y-cy)/ry,d=dx*dx+dy*dy,en=H(x*5,y*7)*.3;
+    if(d>1+en)continue;if(d>.8+en&&H(x*11,y*13)>density)continue;
+    const isUp=dy<-.15&&H(x*17,y*19)>.35;
+    let c=isUp?pk(palL,x*3,y*5):pk(palD,x*3,y*5);
+    c=dk(c,((dy+1)/2)*.2);const lf=(-dx*.4-dy*.4);
+    if(lf>0)c=lt(c,lf*.12);else c=dk(c,-lf*.08);
+    if(H(x*23,y*29)>.9)c=lt(c,.2);
+    pb.setC(x,y,nz(c,x,y,6));
+  }
+}
+
+// NEW: Bark texture with vertical cracks
+function texBark(pb,x1,y1,x2,y2,pal){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){
+    const t=(x-x1)/(x2-x1);
+    // Multiple frequency sin waves for bark ridges
+    const r1=Math.sin(t*18+H(0,Math.floor(y/3))*3)*.5+.5;
+    const r2=Math.sin(t*7+y*.15+H(1,Math.floor(y/5))*2)*.3;
+    const v=Math.max(0,Math.min(1,r1+r2));
+    const ci=Math.min(pal.length-1,Math.floor(v*pal.length));
+    let c=[...pal[ci]];
+    // Vertical crack lines
+    if(H(x*31,Math.floor(y/4)*17)<.08)c=dk(c,.4);
+    // Horizontal ring marks
+    if(y%7===0&&H(x,y*99)<.3)c=dk(c,.15);
+    pb.setC(x,y,nz(c,x,y,7));
+  }
+}
+
+// NEW: Radial glow around a point
+function addGlow(pb,cx,cy,radius,color,intensity){
+  for(let y=cy-radius;y<=cy+radius;y++)for(let x=cx-radius;x<=cx+radius;x++){
+    const d=Math.sqrt((x-cx)**2+(y-cy)**2);
+    if(d>radius)continue;
+    const c=pb.get(x,y);if(!c)continue;
+    const fade=(1-d/radius);
+    const bl=fade*fade*intensity;
+    pb.setC(x,y,[
+      Math.min(255,(c[0]+color[0]*bl))|0,
+      Math.min(255,(c[1]+color[1]*bl))|0,
+      Math.min(255,(c[2]+color[2]*bl))|0,
+    ]);
+  }
+}
+
+// NEW: Horizontal wood planks
+function texPlanks(pb,x1,y1,x2,y2,pal,plankH){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){
+    const row=Math.floor((y-y1)/plankH);
+    const py=(y-y1)%plankH;
+    const t=(x-x1)/(x2-x1);
+    const grain=Math.sin(t*10+H(row*77,0)*4+H(row,Math.floor(x/3))*.5)*.5+.5;
+    const ci=Math.min(pal.length-1,Math.floor(grain*pal.length));
+    let c=[...pal[ci]];
+    // Plank edges
+    if(py===0)c=dk(c,.25);
+    if(py===plankH-1)c=lt(c,.05);
+    // Per-plank color shift
+    const shift=(H(row*99,1)-.5)*15;
+    c=c.map(v=>Math.max(0,Math.min(255,(v+shift)|0)));
+    pb.setC(x,y,nz(c,x,y,6));
+  }
+}
+
+// ---- Post-processing ----
+function autoShade(pb,s){
+  const snap=new Uint8ClampedArray(pb.rgb);
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){
+    if(!pb.has(x,y))continue;const i=(y*pb.w+x)*3;
+    const c=[snap[i],snap[i+1],snap[i+2]];
+    const l=(.5-x/pb.w)*s+(.5-y/pb.h)*s*.6;
+    const a=l>0?lt(c,l):dk(c,-l);pb.set(x,y,...a);
+  }
+}
+function edgeOutline(pb,amt){
+  const snap=new Uint8ClampedArray(pb.rgb);
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){
+    if(!pb.has(x,y))continue;let e=false;
+    for(const[dx,dy]of[[-1,0],[1,0],[0,-1],[0,1]])if(!pb.has(x+dx,y+dy)){e=true;break}
+    if(e){const i=(y*pb.w+x)*3;pb.rgb[i]=(snap[i]*(1-amt))|0;pb.rgb[i+1]=(snap[i+1]*(1-amt))|0;pb.rgb[i+2]=(snap[i+2]*(1-amt))|0}
+  }
+}
+function shadowRect(pb,x1,y1,x2,y2,amt,fd){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){
+    const c=pb.get(x,y);if(!c)continue;
+    let f=1;if(fd==='d')f=1-(y-y1)/(y2-y1);else if(fd==='r')f=1-(x-x1)/(x2-x1);
+    pb.setC(x,y,dk(c,amt*f));
+  }
+}
+
+function render(pb,id,scale,bg){
+  const cv=document.getElementById(id);cv.width=pb.w*scale;cv.height=pb.h*scale;
+  const ctx=cv.getContext('2d');ctx.fillStyle=bg||'#c0c0b8';ctx.fillRect(0,0,cv.width,cv.height);
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){
+    if(!pb.has(x,y))continue;const i=(y*pb.w+x)*3;
+    ctx.fillStyle=`rgb(${pb.rgb[i]},${pb.rgb[i+1]},${pb.rgb[i+2]})`;
+    ctx.fillRect(x*scale,y*scale,scale,scale);
+  }
+}
+
+// ================================================================
+//  ASSET 1: WIZARD TOWER (48 × 90)
+// ================================================================
+const tw = new PB(48, 90);
+
+const TP = {
+  stone: ['#2a3448','#223040','#344050','#1a2838','#3a4a58'].map(hex),
+  mortar: hex('#1a1c28'),
+  roof:  ['#4a2088','#3a1878','#5a2898','#2a1060','#6830a8'].map(hex),
+  wood:  ['#3a2018','#4a3028','#5a3830','#2a1810'].map(hex),
+  glass: ['#e8c040','#d0a830','#f0d050','#c09828'].map(hex),
+  grass: ['#2a5a20','#1a4a10','#3a6a28','#184008'].map(hex),
+  flag:  hex('#e04040'),
+};
+
+// Ground
+for(let y=82;y<90;y++)for(let x=0;x<48;x++)
+  tw.setC(x,y,nz(pk(TP.grass,x*2,y*3),x,y,12));
+// Grass blades
+for(let x=0;x<48;x++)if(H(x,111)<.4){
+  const h=1+Math.floor(H(x,222)*2);
+  for(let d=0;d<h;d++)if(81-d>=0)tw.setC(x,81-d,nz(pk(TP.grass,x,d+77),x,81-d,8));
+}
+
+// Stone path
+texStone(tw,18,82,30,90,['#6a6a68','#5a5a58','#7a7a78'].map(hex),4,.7,hex('#3a3a38'));
+
+// Base (wider)
+texStone(tw,10,70,38,82,TP.stone,5,1.0,TP.mortar);
+// Body
+texStone(tw,13,26,35,70,TP.stone,5,1.0,TP.mortar);
+
+// Conical roof
+texTiles(tw,(x,y)=>inTri(x,y,24,4,8,30,40,30),8,4,40,30,TP.roof,4,3);
+// Ridge line
+tw.setC(24,4,dk(pk(TP.roof,24,4),.3));
+tw.setC(24,5,dk(pk(TP.roof,24,5),.2));
+
+// Spire / finial
+tw.setC(24,2,hex('#c0a040'));tw.setC(24,3,hex('#a08830'));
+tw.setC(24,1,hex('#e0c060'));
+
+// Battlements
+for(let x=12;x<36;x++){
+  const isMerlon=(Math.floor((x-12)/3)%2===0);
+  if(isMerlon){
+    for(let y=24;y<27;y++)tw.setC(x,y,nz(pk(TP.stone,x*3,y*5),x,y,8));
+  }
+  tw.setC(x,27,nz(pk(TP.stone,x*3,27*5),x,27,8));
+}
+
+// Door (arched)
+const tdL=19,tdR=29,tdTop=74,tdBot=82,tdCx=24,tdRad=5;
+for(let y=Math.ceil(tdTop-tdRad);y<tdBot;y++)for(let x=tdL;x<tdR;x++){
+  let ok=y>=tdTop;
+  if(!ok){const dx2=x-tdCx+.5,dy2=y-tdTop;ok=dx2*dx2+dy2*dy2<=tdRad*tdRad}
+  if(!ok)continue;
+  const dL2=x-tdL,dR2=tdR-1-x;
+  let fr=dL2===0||dR2===0||y===tdBot-1;
+  if(y<tdTop){const dist=Math.sqrt((x-tdCx+.5)**2+(y-tdTop)**2);if(Math.abs(dist-tdRad)<1.3)fr=true}
+  if(fr)tw.setC(x,y,nz(hex('#1a1a28'),x,y,5));
+  else{
+    const t=(x-tdL)/(tdR-tdL);
+    const grain=Math.sin(t*12+H(0,Math.floor(y/2))*2)*.5+.5;
+    const ci=Math.min(TP.wood.length-1,Math.floor(grain*TP.wood.length));
+    tw.setC(x,y,nz([...TP.wood[ci]],x,y,6));
+  }
+}
+// Iron door bands
+[72,76,79].forEach(by=>{
+  for(let x=tdL+1;x<tdR-1;x++){
+    const c=tw.get(x,by);
+    if(c)tw.setC(x,by,dk(c,.35));
+  }
+});
+
+// Windows (glowing)
+function towerWin(pb,cx,cy,w,h){
+  for(let y=cy-h;y<=cy+h;y++)for(let x=cx-w;x<=cx+w;x++){
+    const edge=x===cx-w||x===cx+w||y===cy-h||y===cy+h;
+    if(edge)pb.setC(x,y,nz(hex('#1a1a28'),x,y,4));
+    else{
+      const tx=(x-cx+w)/(w*2),ty=(y-cy+h)/(h*2);
+      let c=pk(TP.glass,x*3,y*7);
+      if(tx<.3&&ty<.3)c=lt(c,.3);
+      pb.setC(x,y,c);
+    }
+  }
+}
+towerWin(tw,24,40,3,4);
+towerWin(tw,24,55,3,4);
+towerWin(tw,20,65,2,3);
+towerWin(tw,28,65,2,3);
+
+// Flag
+for(let y=1;y<8;y++)tw.setC(25,y,hex('#5a4030')); // pole extends above roof
+for(let y=1;y<5;y++)for(let x=26;x<31;x++){
+  const wave=Math.sin((x-26)*.8+y*.3)>.2;
+  if(wave||x<29)tw.setC(x,y,nz([...TP.flag],x,y,12));
+}
+
+// Shadows
+shadowRect(tw,13,28,35,32,.15,'d');
+autoShade(tw,.14);
+
+// Glow effects (warm light from windows)
+addGlow(tw,24,40,8,[255,200,80],.25);
+addGlow(tw,24,55,8,[255,200,80],.25);
+addGlow(tw,20,65,6,[255,200,80],.2);
+addGlow(tw,28,65,6,[255,200,80],.2);
+
+edgeOutline(tw,.35);
+render(tw,'tower',5,'#1a2030');
+
+// ================================================================
+//  ASSET 2: SAKURA TREE (64 × 68)
+// ================================================================
+const tr = new PB(64, 68);
+
+const SP = {
+  bark:    ['#3a2818','#4a3420','#2a1c10','#5a4028','#302010'].map(hex),
+  blossom: ['#f0a0b0','#e890a0','#f8b0c0','#f0c0d0','#ffffff'].map(hex),
+  blosDk:  ['#d08090','#c07080','#e090a0'].map(hex),
+  leaf:    ['#3a8020','#4a9030','#2a6a10'].map(hex),
+  leafDk:  ['#1a4a08','#2a5a10','#184008'].map(hex),
+  grass:   ['#4a8c30','#3a7020','#5aa040','#2a5a10'].map(hex),
+};
+
+// Ground
+for(let y=58;y<68;y++)for(let x=0;x<64;x++){
+  let c=nz(pk(SP.grass,x*2,y*3),x,y,12);
+  if((y-58)/10>.4)c=dk(c,((y-58)/10-.4)*.3);
+  tr.setC(x,y,c);
+}
+// Fallen petals on ground
+for(let i=0;i<25;i++){
+  const px=Math.floor(H(i*7,100)*64);
+  const py=58+Math.floor(H(i*11,200)*8);
+  tr.setC(px,py,nz(pk(SP.blossom,px,py),px,py,10));
+}
+
+// Trunk (thick, slightly curved)
+for(let y=30;y<60;y++){
+  const curve=Math.sin((y-30)/30*Math.PI*.3)*2;
+  const halfW=4+((60-y)/30)*2; // wider at base
+  const cx=32+curve;
+  for(let x=Math.floor(cx-halfW);x<=Math.ceil(cx+halfW);x++){
+    if(x<0||x>=64)continue;
+    texBark(tr,x,y,x+1,y+1,SP.bark);
+  }
+}
+
+// Main branches
+function drawBranch(pb,x1,y1,x2,y2,thickness,pal){
+  const steps=Math.max(Math.abs(x2-x1),Math.abs(y2-y1));
+  for(let i=0;i<=steps;i++){
+    const t=i/steps;
+    const bx=x1+(x2-x1)*t;
+    const by=y1+(y2-y1)*t;
+    const w=thickness*(1-t*.5);
+    for(let dx=-w;dx<=w;dx++){
+      const px=Math.round(bx+dx),py=Math.round(by);
+      if(px>=0&&px<pb.w&&py>=0&&py<pb.h)
+        pb.setC(px,py,nz(pk(pal,px*3,py*5),px,py,8));
+    }
+  }
+}
+drawBranch(tr,32,35,18,22,2,SP.bark);
+drawBranch(tr,33,38,46,25,2,SP.bark);
+drawBranch(tr,31,32,25,18,1.5,SP.bark);
+drawBranch(tr,34,34,42,16,1.5,SP.bark);
+drawBranch(tr,30,40,15,32,1.5,SP.bark);
+drawBranch(tr,34,40,50,30,1.5,SP.bark);
+
+// Roots
+drawBranch(tr,30,57,20,60,2,SP.bark);
+drawBranch(tr,34,57,44,60,2,SP.bark);
+drawBranch(tr,28,58,22,62,1.5,SP.bark);
+drawBranch(tr,36,58,42,62,1.5,SP.bark);
+
+// Blossom canopy (multiple overlapping blobs)
+texFoliage(tr,28,18,22,16,SP.blossom,SP.blosDk,.85);  // main blob
+texFoliage(tr,18,22,12,10,SP.blossom,SP.blosDk,.75);   // left blob
+texFoliage(tr,44,20,14,12,SP.blossom,SP.blosDk,.75);   // right blob
+texFoliage(tr,32,8,16,10,SP.blossom,SP.blosDk,.7);     // top blob
+// Some green leaves mixed in at bottom
+texFoliage(tr,22,28,10,6,SP.leaf,SP.leafDk,.6);
+texFoliage(tr,42,27,8,5,SP.leaf,SP.leafDk,.6);
+
+// Small mushrooms at base
+[[25,57],[39,58]].forEach(([mx,my])=>{
+  tr.setC(mx,my,nz(hex('#d04040'),mx,my,8));
+  tr.setC(mx-1,my,nz(hex('#c03838'),mx-1,my,8));
+  tr.setC(mx+1,my,nz(hex('#c03838'),mx+1,my,8));
+  tr.setC(mx,my+1,nz(hex('#e8d8c0'),mx,my+1,6));
+});
+
+autoShade(tr,.1);
+edgeOutline(tr,.28);
+render(tr,'tree',5,'#c0c0b8');
+
+// ================================================================
+//  ASSET 3: TREASURE CHEST (40 × 38)
+// ================================================================
+const ch = new PB(40, 38);
+
+const CP = {
+  wood:  ['#6b4020','#7b5030','#8b6040','#5a3018'].map(hex),
+  wdlt:  ['#9b7050','#ab8060','#8b6545','#b89070'].map(hex),
+  metal: ['#5a5a60','#6a6a70','#4a4a50','#7a7a80'].map(hex),
+  gold:  ['#d0a020','#e0b830','#c09018','#f0c840','#f8e060'].map(hex),
+  gem:   hex('#3080e0'),
+  gemLt: hex('#60b0ff'),
+  grass: ['#4a8c30','#3a7020','#5aa040'].map(hex),
+};
+
+// Ground
+for(let y=30;y<38;y++)for(let x=0;x<40;x++)
+  ch.setC(x,y,nz(pk(CP.grass,x*2,y*3),x,y,10));
+
+// Chest body
+texPlanks(ch,8,22,32,31,CP.wood,3);
+// Front face
+texPlanks(ch,8,22,32,31,CP.wood,3);
+
+// Metal bands (horizontal iron straps)
+[22,25,28].forEach(by=>{
+  for(let x=8;x<32;x++){
+    let c=pk(CP.metal,x*3,by*5);
+    // Highlight on top edge
+    if(H(x,by*99)>.7)c=lt(c,.15);
+    ch.setC(x,by,nz(c,x,by,5));
+  }
+});
+// Metal rivets
+[22,25,28].forEach(by=>{
+  [10,15,20,25,30].forEach(rx=>{
+    if(rx<32)ch.setC(rx,by,lt(pk(CP.metal,rx,by),.2));
+  });
+});
+
+// Chest corners (metal)
+for(let y=22;y<31;y++){
+  ch.setC(8,y,nz(pk(CP.metal,8,y),.8,y,5));
+  ch.setC(31,y,nz(pk(CP.metal,31,y),31,y,5));
+}
+
+// Open lid (angled, showing interior)
+// Lid back panel (visible inside)
+for(let y=10;y<22;y++)for(let x=9;x<31;x++){
+  const depth=(22-y)/12;
+  let c=dk(pk(CP.wood,x*3,y*5),.3); // darker inside
+  ch.setC(x,y,nz(c,x,y,6));
+}
+// Lid top surface (angled away from viewer)
+for(let y=8;y<13;y++)for(let x=8;x<32;x++){
+  const t=(x-8)/(32-8);
+  const grain=Math.sin(t*8+H(0,y)*3)*.5+.5;
+  const ci=Math.min(CP.wdlt.length-1,Math.floor(grain*CP.wdlt.length));
+  ch.setC(x,y,nz([...CP.wdlt[ci]],x,y,6));
+}
+// Lid metal band
+for(let x=8;x<32;x++)ch.setC(x,10,nz(pk(CP.metal,x,10),x,10,5));
+// Lid edge
+for(let x=8;x<32;x++){
+  ch.setC(x,8,nz(dk(pk(CP.metal,x,8),.1),x,8,4));
+  ch.setC(x,12,nz(pk(CP.metal,x,12),x,12,4));
+}
+
+// Gold pile inside chest
+for(let y=16;y<23;y++)for(let x=11;x<29;x++){
+  const cx2=20,cy2=20;
+  const dx2=(x-cx2)/9,dy2=(y-cy2)/4;
+  const d=dx2*dx2+dy2*dy2;
+  if(d>1+H(x*5,y*7)*.3)continue;
+  if(y>20&&Math.abs(x-20)>6)continue; // taper at bottom
+  let c=pk(CP.gold,x*7,y*11);
+  // Sparkle
+  if(H(x*31,y*37)>.85)c=lt(c,.35);
+  ch.setC(x,y,nz(c,x,y,8));
+}
+
+// Spilling coins
+[[7,28],[6,29],[33,27],[34,28],[5,30],[35,29],[32,30]].forEach(([cx2,cy2])=>{
+  ch.setC(cx2,cy2,nz(pk(CP.gold,cx2*7,cy2*11),cx2,cy2,6));
+});
+
+// Gem on top of gold pile
+ch.setC(20,16,CP.gemLt);ch.setC(21,16,CP.gem);
+ch.setC(19,17,CP.gem);ch.setC(20,17,CP.gemLt);ch.setC(21,17,CP.gem);
+ch.setC(20,18,dk(CP.gem,.2));
+
+// Lock/clasp
+ch.setC(20,22,hex('#c0a030'));ch.setC(19,22,hex('#a08020'));ch.setC(21,22,hex('#a08020'));
+
+// Chest bottom shadow
+shadowRect(ch,8,29,32,31,.15,'d');
+
+autoShade(ch,.1);
+edgeOutline(ch,.3);
+render(ch,'chest',6,'#c0c0b8');
+
+// ================================================================
+//  ASSET 4: VILLAGE WELL (44 × 48)
+// ================================================================
+const wl = new PB(44, 48);
+
+const WP = {
+  stone:  ['#7a7a78','#6a6a68','#8a8a88','#5a5a58','#9a9a98'].map(hex),
+  mortar: hex('#4a4a48'),
+  wood:   ['#5a3520','#6b4530','#7b5540','#4a2a18'].map(hex),
+  rope:   ['#c0a870','#b09860','#d0b880','#a08850'].map(hex),
+  water:  ['#2050a0','#3060b0','#1848a0','#4070c0'].map(hex),
+  waterLt:hex('#6090d0'),
+  grass:  ['#4a8c30','#3a7020','#5aa040','#2a5a10'].map(hex),
+  cobble: ['#9a9590','#8a8580','#aa9fa0','#7a7570'].map(hex),
+};
+
+// Ground (grass)
+for(let y=38;y<48;y++)for(let x=0;x<44;x++)
+  wl.setC(x,y,nz(pk(WP.grass,x*2,y*3),x,y,10));
+
+// Cobblestone platform
+texStone(wl,8,36,36,44,WP.cobble,5,.8,hex('#6a6560'));
+
+// Well wall (circular, shown as front view = rounded rect)
+// Stone cylindrical body
+texStone(wl,12,26,32,38,WP.stone,4,.9,WP.mortar);
+// Curved top rim
+for(let x=11;x<33;x++){
+  const rim=25+(x<14||x>29?1:0); // slightly raised at edges
+  wl.setC(x,rim,nz(dk(pk(WP.stone,x,rim),.1),x,rim,5));
+  wl.setC(x,rim-1,nz(pk(WP.stone,x,rim-1),x,rim-1,5));
+}
+
+// Water inside (visible from top)
+for(let x=14;x<30;x++){
+  for(let y=24;y<26;y++){
+    let c=pk(WP.water,x*3,y*7);
+    // Subtle highlight
+    if(H(x*13,y*17)>.8)c=lt(c,.2);
+    wl.setC(x,y,nz(c,x,y,6));
+  }
+}
+
+// Wooden frame (A-frame above well)
+// Left post
+texWood(wl,13,10,16,26,WP.wood,'v');
+// Right post
+texWood(wl,28,10,31,26,WP.wood,'v');
+// Cross beam at top
+for(let x=12;x<32;x++)
+  for(let y=9;y<12;y++)
+    wl.setC(x,y,nz(pk(WP.wood,x*3,y*5),x,y,6));
+// Ridge cap
+for(let x=12;x<32;x++)
+  wl.setC(x,8,nz(dk(pk(WP.wood,x,8),.15),x,8,5));
+
+// Small roof over frame
+texTiles(wl,(x,y)=>inTri(x,y,22,4,10,12,34,12),10,4,34,12,
+  ['#6a6a68','#5a5a58','#7a7a78','#4a4a48'].map(hex),4,2);
+
+// Rope (hanging from crossbeam)
+for(let y=12;y<28;y++){
+  const rx=22+Math.round(Math.sin(y*.3)*.5);
+  const ri=Math.floor(H(rx,y*99)*WP.rope.length);
+  wl.setC(rx,y,nz([...WP.rope[ri]],rx,y,6));
+}
+
+// Bucket
+for(let y=26;y<30;y++)for(let x=20;x<25;x++){
+  const edge=x===20||x===24||y===29;
+  if(edge)wl.setC(x,y,nz(hex('#4a4a50'),x,y,5));
+  else wl.setC(x,y,nz(pk(WP.wood,x*3,y*5),x,y,6));
+}
+// Bucket handle
+wl.setC(21,25,hex('#5a5a60'));wl.setC(22,24,hex('#5a5a60'));wl.setC(23,25,hex('#5a5a60'));
+
+// Crank handle on crossbeam
+wl.setC(32,10,hex('#5a5a60'));wl.setC(33,10,hex('#5a5a60'));
+wl.setC(33,9,hex('#6a6a70'));wl.setC(34,9,hex('#6a6a70'));
+
+// Small flowers around the base
+[[6,37],[38,38],[9,40],[35,40]].forEach(([fx,fy])=>{
+  wl.setC(fx,fy,nz(hex('#e06060'),fx,fy,10));
+  wl.setC(fx,fy+1,nz(hex('#3a8020'),fx,fy+1,8));
+  wl.setC(fx+1,fy+1,nz(hex('#2a6a10'),fx+1,fy+1,8));
+});
+
+shadowRect(wl,12,26,32,29,.12,'d');
+autoShade(wl,.1);
+edgeOutline(wl,.3);
+render(wl,'well',5,'#c0c0b8');
+
+})();
+</script>
+</body>
+</html>

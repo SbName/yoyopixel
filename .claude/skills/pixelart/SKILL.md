@@ -29,6 +29,7 @@ A single, complete, self-contained `.html` file. No external images or dependenc
 | 32×32+          | detailed| 12–20     | Highlight + base + shadow, texture hints|
 | 48×48+          | ultra   | 15–25     | Multi-layer shading, dithering          |
 | 96×64+ (canvas) | ultra   | Unlimited | Procedural FBM noise, Bayer dithering   |
+| 48×96+ (asset)  | ultra   | Unlimited | Procedural texture engine, region-based  |
 
 ### Prompt → Rendering Method
 
@@ -38,6 +39,8 @@ A single, complete, self-contained `.html` file. No external images or dependenc
 | Character / sprite             | **CSS Grid + JS** (per-pixel control)  |
 | "animated", movement, effects  | **Grid + animation JS**                |
 | Landscape, scene, environment  | **Canvas** (procedural generation)     |
+| Building, tileset, game asset  | **Canvas** (procedural texture engine) |
+| Animal, creature, organic      | **Canvas** (procedural organic textures)|
 
 ### Prompt → Auto Animations & Atmosphere
 
@@ -219,6 +222,51 @@ U: #.#  V: #.#  W: #.#  X: #.#  Y: #.#  Z: ###
 2. Use 3×5 for small art (≤16px canvas), 5×7 for larger (≥24px)
 3. Leave 1px gap between characters
 4. Align to pixel grid — no half-pixel offsets
+
+---
+
+---
+
+## Procedural Texture Engine (for game assets & tilesets)
+
+When the prompt implies a **building**, **game asset**, **tileset**, or **creature** at sizes ≥48px, use the procedural texture engine instead of per-pixel string arrays. The LLM declares **regions + materials**, the engine auto-fills textures.
+
+### Architecture
+
+```
+LLM outputs compact declarations:
+  → Shape regions (ellipse, rect, triangle composites)
+  → Material assignment per region
+  → Engine auto-fills procedural textures + shading + outline
+```
+
+### Available Procedural Textures
+
+| Texture | Algorithm | Use for |
+|---------|-----------|---------|
+| `texStone` | Voronoi cells + mortar joints | Stone walls, cobblestone, rock |
+| `texTiles` | Offset grid + overlap shading | Roof tiles, floor tiles |
+| `texStucco` | Noisy flat fill | Plaster, stucco, painted walls |
+| `texWood` | Sin-wave grain pattern | Wood beams, planks, furniture |
+| `texPlanks` | Horizontal boards + edge lines | Wood floors, chest body, doors |
+| `texBark` | Multi-frequency ridges + cracks | Tree trunks, branches |
+| `texFoliage` | Fractal blob + irregular edges | Bushes, tree canopy, hedges |
+| `texFur` | Directional strand pattern | Animal fur, hair, grass |
+| `texScales` | Overlapping crescent grid | Fish, reptile, dragon scales |
+| `texFeathers` | V-shaft + barb layering | Bird plumage, owl, wings |
+| `texSpiral` | Logarithmic spiral + dome shading | Snail shell, ammonite |
+| `texSmooth` | Gradient fill with noise | Smooth skin, fins, body |
+
+### Post-Processing Pipeline
+
+1. **`autoShade(pb, strength)`** — Directional light from top-left
+2. **`edgeOutline(pb, amount)`** — Darken pixels adjacent to empty space
+3. **`shadowRect(pb, ...)`** — Local shadow with directional falloff
+4. **`addGlow(pb, cx, cy, radius, color, intensity)`** — Radial light emission
+
+### Rendering
+
+Uses `<canvas>` with `PixelBuffer` class. Each pixel is individually addressable. Rendered at configurable scale (4–6x typical) with `image-rendering: pixelated`.
 
 ---
 

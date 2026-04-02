@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Procedural Pixel Art Engine · Animals</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;gap:32px;
+    background:#0e0e1a;font-family:'Courier New',monospace;color:#888;
+    padding:40px 20px;
+  }
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges}
+  h1{font-size:16px;letter-spacing:3px;color:#aaa}
+  .gallery{display:flex;gap:28px;flex-wrap:wrap;justify-content:center}
+  .card{
+    text-align:center;background:#12122a;border:1px solid #222244;
+    border-radius:8px;padding:16px 16px 12px;transition:border-color .3s;
+  }
+  .card:hover{border-color:#e94560}
+  .card h2{font-size:12px;color:#666;letter-spacing:2px;margin-top:10px}
+  .tags{margin-top:6px}
+  .tag{display:inline-block;background:#1a1a3e;color:#5a5a8a;padding:1px 6px;border-radius:3px;font-size:9px;margin:1px}
+  .note{font-size:11px;color:#444;max-width:700px;text-align:center;line-height:1.8}
+</style>
+</head>
+<body>
+
+<h1>PROCEDURAL ENGINE &middot; ORGANIC TEXTURES</h1>
+
+<div class="gallery">
+  <div class="card">
+    <canvas id="fox"></canvas>
+    <h2>FOX</h2>
+    <div class="tags"><span class="tag">Fur Strands</span><span class="tag">Body Zones</span></div>
+  </div>
+  <div class="card">
+    <canvas id="koi"></canvas>
+    <h2>KOI FISH</h2>
+    <div class="tags"><span class="tag">Scale Overlay</span><span class="tag">Fin Gradient</span></div>
+  </div>
+  <div class="card">
+    <canvas id="owl"></canvas>
+    <h2>OWL</h2>
+    <div class="tags"><span class="tag">Feather Layers</span><span class="tag">Face Disc</span></div>
+  </div>
+  <div class="card">
+    <canvas id="snail"></canvas>
+    <h2>SNAIL</h2>
+    <div class="tags"><span class="tag">Spiral Shell</span><span class="tag">Dome Shading</span></div>
+  </div>
+</div>
+
+<div class="note">
+  4 new organic texture algorithms: fur strands, fish scales, feather barbs, spiral shell.<br>
+  Same engine core &mdash; shapes defined as ellipse composites, textures fill automatically.
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ================================================================
+//  SHARED ENGINE (compact)
+// ================================================================
+class PB {
+  constructor(w,h){this.w=w;this.h=h;this.rgb=new Uint8ClampedArray(w*h*3);this.mask=new Uint8Array(w*h)}
+  set(x,y,r,g,b){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return;const i=(y*this.w+x)*3;this.rgb[i]=r;this.rgb[i+1]=g;this.rgb[i+2]=b;this.mask[y*this.w+x]=1}
+  setC(x,y,c){this.set(x,y,c[0],c[1],c[2])}
+  get(x,y){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return null;if(!this.mask[y*this.w+x])return null;const i=(y*this.w+x)*3;return[this.rgb[i],this.rgb[i+1],this.rgb[i+2]]}
+  has(x,y){x|=0;y|=0;return x>=0&&x<this.w&&y>=0&&y<this.h&&this.mask[y*this.w+x]===1}
+}
+
+function H(x,y){let n=((x|0)*374761393+(y|0)*668265263+1013904223)|0;n=(((n>>13)^n)*1274126177)|0;return(((n>>16)^n)>>>0)/4294967296}
+function hex(s){return[parseInt(s.slice(1,3),16),parseInt(s.slice(3,5),16),parseInt(s.slice(5,7),16)]}
+function dk(c,a){return c.map(v=>Math.max(0,(v*(1-a))|0))}
+function lt(c,a){return c.map(v=>Math.min(255,(v+(255-v)*a)|0))}
+function nz(c,x,y,r){const n=(H(x*7,y*13)-.5)*r;return c.map(v=>Math.max(0,Math.min(255,(v+n)|0)))}
+function pk(a,x,y){return[...a[Math.floor(H(x,y)*a.length)%a.length]]}
+function inE(x,y,cx,cy,rx,ry){const dx=(x-cx)/rx,dy=(y-cy)/ry;return dx*dx+dy*dy<=1}
+
+// Post-processing
+function autoShade(pb,s){
+  const sn=new Uint8ClampedArray(pb.rgb);
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){
+    if(!pb.has(x,y))continue;const i=(y*pb.w+x)*3;
+    const c=[sn[i],sn[i+1],sn[i+2]],l=(.5-x/pb.w)*s+(.5-y/pb.h)*s*.6;
+    const a=l>0?lt(c,l):dk(c,-l);pb.set(x,y,...a);
+  }
+}
+function edgeOutline(pb,amt){
+  const sn=new Uint8ClampedArray(pb.rgb);
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){
+    if(!pb.has(x,y))continue;let e=false;
+    for(const[dx,dy]of[[-1,0],[1,0],[0,-1],[0,1]])if(!pb.has(x+dx,y+dy)){e=true;break}
+    if(e){const i=(y*pb.w+x)*3;pb.rgb[i]=(sn[i]*(1-amt))|0;pb.rgb[i+1]=(sn[i+1]*(1-amt))|0;pb.rgb[i+2]=(sn[i+2]*(1-amt))|0}
+  }
+}
+function render(pb,id,scale,bg){
+  const cv=document.getElementById(id);cv.width=pb.w*scale;cv.height=pb.h*scale;
+  const ctx=cv.getContext('2d');ctx.fillStyle=bg||'#c0c0b8';ctx.fillRect(0,0,cv.width,cv.height);
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){
+    if(!pb.has(x,y))continue;const i=(y*pb.w+x)*3;
+    ctx.fillStyle=`rgb(${pb.rgb[i]},${pb.rgb[i+1]},${pb.rgb[i+2]})`;
+    ctx.fillRect(x*scale,y*scale,scale,scale);
+  }
+}
+
+// ================================================================
+//  NEW ORGANIC TEXTURE ALGORITHMS
+// ================================================================
+
+// Fur: directional strand pattern
+function texFur(pb, test, x1,y1,x2,y2, pal, angle) {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (!test(x, y)) continue;
+    const across = -x * sin + y * cos;
+    const along = x * cos + y * sin;
+    const strand = Math.sin(across * 2.5 + H(Math.floor(along / 2), 0) * 3) * 0.5 + 0.5;
+    const ci = Math.min(pal.length - 1, Math.floor(strand * pal.length));
+    let c = [...pal[ci]];
+    if (H(x * 19, y * 23) > 0.92) c = lt(c, 0.15);
+    pb.setC(x, y, nz(c, x, y, 6));
+  }
+}
+
+// Scales: overlapping crescent grid (for fish/reptiles)
+function texScales(pb, test, x1,y1,x2,y2, pal, sw, sh) {
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (!test(x, y)) continue;
+    const row = Math.floor((y - y1) / sh);
+    const off = (row & 1) * Math.floor(sw / 2);
+    const tx = ((x - x1 + off) % sw + sw) % sw;
+    const ty = (y - y1) % sh;
+    const col = Math.floor((x - x1 + off) / sw);
+    const nx = tx / sw, ny = ty / sh;
+
+    let c = [...pal[Math.floor(H(row * 97 + col, row * 31 + 77) * pal.length) % pal.length]];
+
+    // Convex scale shading
+    const cx2 = nx - 0.5, cy2 = ny - 0.3;
+    const d = Math.sqrt(cx2*cx2 + cy2*cy2);
+    if (ny < 0.15) c = dk(c, 0.18);        // under-overlap shadow
+    else if (ny < 0.35) c = lt(c, 0.1);     // top highlight
+    if (ny > 0.75) c = dk(c, (ny-.75)/.25 * 0.2); // bottom curve
+    if (d > 0.4) c = dk(c, (d-.4) * 0.15);  // edge darken
+
+    pb.setC(x, y, nz(c, x, y, 4));
+  }
+}
+
+// Feathers: layered V-pattern with shaft
+function texFeathers(pb, test, x1,y1,x2,y2, pal, fw, fh) {
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (!test(x, y)) continue;
+    const row = Math.floor((y - y1) / fh);
+    const off = (row & 1) * Math.floor(fw / 2);
+    const tx = ((x - x1 + off) % fw + fw) % fw;
+    const ty = (y - y1) % fh;
+    const col = Math.floor((x - x1 + off) / fw);
+    const nx = tx / fw, ny = ty / fh;
+
+    let c = [...pal[Math.floor(H(row * 91 + col, row * 37 + 53) * pal.length) % pal.length]];
+
+    // Central shaft
+    if (Math.abs(nx - 0.5) < 0.1 && ny > 0.2) c = dk(c, 0.25);
+    // Barb lines (diagonal from shaft)
+    const barbAngle = (nx < 0.5) ? (0.5 - nx) * 2 : (nx - 0.5) * 2;
+    const barbLine = Math.sin((barbAngle + ny) * 12) * 0.5 + 0.5;
+    if (barbLine < 0.15) c = dk(c, 0.08);
+    // Overlap shading
+    if (ny > 0.85) c = dk(c, 0.2);
+    if (ny < 0.1) c = lt(c, 0.06);
+
+    pb.setC(x, y, nz(c, x, y, 4));
+  }
+}
+
+// Spiral shell: logarithmic spiral with dome shading
+function texSpiral(pb, cx, cy, radius, pal, turns) {
+  for (let y = cy - radius - 1; y <= cy + radius + 1; y++)
+    for (let x = cx - radius - 1; x <= cx + radius + 1; x++) {
+      const dx = x - cx, dy = y - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d > radius) continue;
+
+      const angle = (Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2); // 0-1
+      const spiral = (angle + Math.log(d + 1) / Math.log(radius + 1) * turns) % 1;
+
+      const ci = Math.floor(spiral * pal.length) % pal.length;
+      let c = [...pal[ci]];
+
+      // Dome shading (3D convex surface)
+      const nd = d / radius;
+      const dome = Math.sqrt(Math.max(0, 1 - nd * nd));
+      const lf = (-dx / radius * 0.25 - dy / radius * 0.25 + dome * 0.2);
+      if (lf > 0) c = lt(c, lf * 0.35);
+      else c = dk(c, -lf * 0.25);
+      // Rim darkening
+      if (nd > 0.85) c = dk(c, (nd - 0.85) / 0.15 * 0.2);
+
+      // Spiral groove lines
+      const grooveDist = Math.abs(spiral - 0.5);
+      if (grooveDist > 0.45) c = dk(c, 0.15);
+
+      pb.setC(x, y, nz(c, x, y, 5));
+    }
+}
+
+// Smooth body fill with gradient (for snail body, fins etc.)
+function texSmooth(pb, test, x1,y1,x2,y2, palTop, palBot) {
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (!test(x, y)) continue;
+    const t = (y - y1) / Math.max(1, y2 - y1);
+    const pal = t < 0.5 ? palTop : palBot;
+    let c = pk(pal, x * 3, y * 5);
+    c = nz(c, x, y, 8);
+    pb.setC(x, y, c);
+  }
+}
+
+// ================================================================
+//  ANIMAL 1: FOX (50 × 40)
+// ================================================================
+const fox = new PB(50, 40);
+
+const FP = {
+  orange:  ['#d06020','#c05018','#e07028','#b84810','#d86828'].map(hex),
+  orangeDk:['#a04010','#903808','#b04818'].map(hex),
+  white:   ['#f0e8e0','#e8e0d0','#f8f0e8','#ffe8d8'].map(hex),
+  earIn:   ['#d88070','#c87060','#e89080'].map(hex),
+  grass:   ['#4a8c30','#3a7020','#5aa040','#2a5a10'].map(hex),
+};
+
+// Ground
+for (let y = 34; y < 40; y++) for (let x = 0; x < 50; x++)
+  fox.setC(x, y, nz(pk(FP.grass, x*2, y*3), x, y, 10));
+
+// Tail (behind body) — large curved shape
+texFur(fox, (x,y) => {
+  // Tail: curved ellipse going right and up
+  const tx = (x - 40) / 8, ty = (y - 20) / 5;
+  const curve = Math.sin((x - 32) * 0.08) * 3;
+  return inE(x, y, 40, 18 + curve, 8, 5);
+}, 30, 10, 50, 30, FP.orange, Math.PI * 0.7);
+// Tail tip (white)
+texFur(fox, (x,y) => inE(x, y, 46, 15, 3.5, 3), 42, 12, 50, 20, FP.white, Math.PI * 0.6);
+
+// Body
+texFur(fox, (x,y) => inE(x, y, 24, 26, 12, 8), 12, 18, 36, 34, FP.orange, Math.PI * 0.55);
+
+// Belly/chest (lighter)
+texFur(fox, (x,y) => inE(x, y, 20, 28, 7, 5), 13, 23, 28, 34, FP.white, Math.PI * 0.5);
+
+// Legs
+for (const lx of [16, 21, 27, 31]) {
+  for (let y = 30; y < 35; y++) for (let x = lx; x < lx + 3; x++) {
+    const isLower = y > 32;
+    const pal = isLower ? FP.orangeDk : FP.orange;
+    fox.setC(x, y, nz(pk(pal, x*3, y*5), x, y, 7));
+  }
+  // Paws
+  fox.setC(lx, 35, nz(hex('#2a2a2a'), lx, 35, 5));
+  fox.setC(lx+1, 35, nz(hex('#2a2a2a'), lx+1, 35, 5));
+  fox.setC(lx+2, 35, nz(hex('#2a2a2a'), lx+2, 35, 5));
+}
+
+// Head
+texFur(fox, (x,y) => inE(x, y, 12, 18, 8, 7), 4, 11, 20, 26, FP.orange, -0.3);
+// Cheeks (white)
+texFur(fox, (x,y) => inE(x, y, 10, 20, 5, 4), 5, 16, 16, 25, FP.white, -0.2);
+
+// Snout
+texFur(fox, (x,y) => inE(x, y, 6, 20, 3.5, 2.5), 2, 17, 10, 23, FP.white, -0.1);
+
+// Ears
+for (const [ecx, tipY] of [[8, 7], [16, 6]]) {
+  // Outer ear (orange)
+  for (let y = tipY; y < 14; y++) {
+    const w = ((y - tipY) / (14 - tipY)) * 3;
+    for (let x = Math.floor(ecx - w); x <= Math.ceil(ecx + w); x++)
+      fox.setC(x, y, nz(pk(FP.orange, x*3, y*5), x, y, 8));
+  }
+  // Inner ear (pink)
+  for (let y = tipY + 2; y < 13; y++) {
+    const w = ((y - tipY - 2) / (13 - tipY - 2)) * 2;
+    for (let x = Math.floor(ecx - w); x <= Math.ceil(ecx + w); x++)
+      fox.setC(x, y, nz(pk(FP.earIn, x*3, y*5), x, y, 6));
+  }
+}
+
+// Eyes
+fox.set(9, 17, 40, 160, 40);   fox.set(10, 17, 30, 140, 30);
+fox.set(15, 17, 40, 160, 40);  fox.set(16, 17, 30, 140, 30);
+// Eye highlights
+fox.set(9, 16, 200, 220, 200); fox.set(15, 16, 200, 220, 200);
+// Nose
+fox.set(4, 20, 20, 20, 20);    fox.set(5, 20, 20, 20, 20);
+// Mouth line
+fox.set(5, 21, 40, 30, 30);    fox.set(6, 22, 40, 30, 30);
+
+autoShade(fox, 0.1);
+edgeOutline(fox, 0.3);
+render(fox, 'fox', 6, '#c0c0b8');
+
+// ================================================================
+//  ANIMAL 2: KOI FISH (48 × 26)
+// ================================================================
+const koi = new PB(48, 26);
+
+const KP = {
+  gold:   ['#e0a020','#d09018','#f0b830','#c88010','#e8b028'].map(hex),
+  red:    ['#d04020','#c03818','#e04828','#b03010'].map(hex),
+  white:  ['#f0ece8','#e8e4e0','#f8f4f0','#e0dcd8'].map(hex),
+  fin:    ['#f0c880','#e0b870','#f8d090','#d0a860'].map(hex),
+  water:  ['#2858b0','#3068c0','#1848a0','#3878d0'].map(hex),
+  waterLt:['#4080d0','#5090e0'].map(hex),
+};
+
+// Water background
+for (let y = 0; y < 26; y++) for (let x = 0; x < 48; x++) {
+  let c = pk(KP.water, x * 2, y * 3);
+  // Ripple pattern
+  const ripple = Math.sin(x * 0.4 + y * 0.2 + Math.sin(y * 0.5) * 2) * 0.5 + 0.5;
+  if (ripple > 0.7) c = lt(c, 0.08);
+  koi.setC(x, y, nz(c, x, y, 6));
+}
+
+// Body shape: elongated ellipse
+const koiBody = (x, y) => inE(x, y, 22, 13, 17, 6);
+// Tail fin region
+const koiTail = (x, y) => {
+  const dx = (x - 42) / 6, dy = (y - 13) / (4 + Math.abs(x - 42) * 0.8);
+  return dx * dx + dy * dy <= 1 && x > 36;
+};
+
+// Body base: gold scales
+texScales(koi, koiBody, 5, 7, 40, 20, KP.gold, 4, 3);
+
+// White patches (overwrite some body areas)
+texScales(koi, (x,y) => koiBody(x,y) && inE(x,y,16,11,6,4), 10, 7, 22, 16, KP.white, 4, 3);
+texScales(koi, (x,y) => koiBody(x,y) && inE(x,y,28,15,5,3), 23, 12, 34, 19, KP.white, 4, 3);
+
+// Red patches
+texScales(koi, (x,y) => koiBody(x,y) && inE(x,y,12,14,4,3), 8, 11, 16, 18, KP.red, 4, 3);
+texScales(koi, (x,y) => koiBody(x,y) && inE(x,y,22,11,3,2.5), 19, 8, 26, 14, KP.red, 4, 3);
+
+// Belly (lighter, no scales)
+texSmooth(koi, (x,y) => inE(x,y,22,16,14,3), 8, 13, 36, 20, KP.white, KP.fin);
+
+// Tail fin
+texSmooth(koi, koiTail, 36, 6, 48, 20, KP.fin, KP.gold);
+// Tail fin rays
+for (let i = 0; i < 5; i++) {
+  const angle = -0.6 + i * 0.3;
+  for (let d = 0; d < 6; d++) {
+    const rx = 40 + d * Math.cos(angle), ry = 13 + d * Math.sin(angle);
+    const c = koi.get(Math.round(rx), Math.round(ry));
+    if (c) koi.setC(Math.round(rx), Math.round(ry), dk(c, 0.15));
+  }
+}
+
+// Dorsal fin
+for (let x = 16; x < 28; x++) {
+  const h = 2 + Math.sin((x - 16) / 12 * Math.PI) * 2.5;
+  for (let dy = 0; dy < h; dy++) {
+    const fy = 8 - dy;
+    if (fy >= 0) koi.setC(x, fy, nz(pk(KP.fin, x, fy), x, fy, 6));
+  }
+}
+
+// Pectoral fin
+for (let y = 14; y < 19; y++) for (let x = 14; x < 20; x++) {
+  if (inE(x, y, 17, 16, 3.5, 2.5)) {
+    koi.setC(x, y, nz(pk(KP.fin, x*3, y*5), x, y, 5));
+  }
+}
+
+// Eye
+koi.set(8, 12, 20, 20, 20);
+koi.set(8, 11, 180, 180, 180);
+// Mouth
+koi.set(5, 13, 160, 100, 80);
+
+// Water highlights on top of fish
+for (let y = 7; y < 20; y++) for (let x = 5; x < 40; x++) {
+  if (koiBody(x, y) && H(x * 31, y * 37) > 0.95) {
+    const c = koi.get(x, y);
+    if (c) koi.setC(x, y, lt(c, 0.12));
+  }
+}
+
+autoShade(koi, 0.08);
+edgeOutline(koi, 0.25);
+render(koi, 'koi', 6, '#1a3050');
+
+// ================================================================
+//  ANIMAL 3: OWL (34 × 44)
+// ================================================================
+const owl = new PB(34, 44);
+
+const OP = {
+  body:   ['#7a5030','#6a4020','#8a6040','#5a3818','#9a7050'].map(hex),
+  bodyLt: ['#a08060','#b09070','#907050','#c0a080'].map(hex),
+  face:   ['#d8c8a0','#c8b890','#e0d0b0','#b8a880'].map(hex),
+  breast: ['#c0a878','#b09868','#d0b888','#a08858'].map(hex),
+  wing:   ['#5a3818','#4a2810','#6a4828','#3a2008'].map(hex),
+  branch: ['#4a3020','#3a2818','#5a4030','#6a5040'].map(hex),
+};
+
+// Night sky background
+for (let y = 0; y < 44; y++) for (let x = 0; x < 34; x++) {
+  const t = y / 44;
+  const r = Math.round(8 + t * 12);
+  const g = Math.round(8 + t * 15);
+  const b = Math.round(20 + t * 20);
+  owl.set(x, y, r, g, b);
+}
+// Stars
+for (let i = 0; i < 12; i++) {
+  const sx = Math.floor(H(i * 7, 100) * 34);
+  const sy = Math.floor(H(i * 11, 200) * 20);
+  if (!inE(sx, sy, 17, 18, 11, 14))
+    owl.set(sx, sy, 200 + Math.floor(H(i, 300) * 55), 200 + Math.floor(H(i, 400) * 55), 220);
+}
+
+// Branch
+for (let x = 0; x < 34; x++) {
+  for (let y = 37; y < 40; y++) {
+    const wobble = Math.sin(x * 0.3) * 0.5;
+    if (y - 37 < 2.5 + wobble)
+      owl.setC(x, y, nz(pk(OP.branch, x * 3, y * 5), x, y, 8));
+  }
+}
+// Branch bark detail
+for (let x = 0; x < 34; x++) {
+  if (H(x, 777) < 0.3) owl.setC(x, 38, dk(pk(OP.branch, x, 38), 0.2));
+}
+
+// Body (egg shape: wider at bottom)
+const owlBody = (x, y) => {
+  const ry = y < 22 ? 8 : 12;
+  return inE(x, y, 17, 24, 10, ry) && y < 37;
+};
+texFeathers(owl, owlBody, 7, 12, 27, 37, OP.body, 5, 4);
+
+// Breast (lighter feathers, center)
+texFeathers(owl, (x,y) => inE(x,y,17,28,6,7) && y < 37, 11, 21, 23, 37, OP.breast, 4, 3);
+
+// Wings (darker, on sides)
+texFeathers(owl, (x,y) => owlBody(x,y) && (x < 11 || x > 23) && y > 18,
+  5, 18, 29, 36, OP.wing, 5, 4);
+
+// Head
+texFeathers(owl, (x,y) => inE(x,y,17,14,9,7), 8, 7, 26, 22, OP.body, 4, 3);
+
+// Face disc (heart-shaped lighter area)
+texSmooth(owl, (x,y) => inE(x,y,17,16,7,5.5) && y > 11,
+  10, 11, 24, 22, OP.face, OP.face);
+
+// Ear tufts
+for (const [ecx, dir] of [[11, -1], [23, 1]]) {
+  for (let y = 7; y < 12; y++) {
+    const w = (12 - y) / 5 * 2;
+    for (let dx = 0; dx < w; dx++) {
+      const ex = ecx + dx * dir;
+      owl.setC(ex, y, nz(pk(OP.body, ex*3, y*5), ex, y, 7));
+    }
+  }
+}
+
+// Eyes (large, yellow)
+for (const ecx of [13, 21]) {
+  // Eye disc
+  for (let y = 13; y < 19; y++) for (let x = ecx - 3; x <= ecx + 3; x++) {
+    if (inE(x, y, ecx, 16, 3.2, 3.2)) {
+      // Yellow iris
+      const d = Math.sqrt((x-ecx)**2 + (y-16)**2);
+      if (d < 1.3) {
+        // Pupil (black)
+        owl.set(x, y, 10, 10, 10);
+      } else {
+        // Iris
+        const bright = 1 - d / 3.2;
+        owl.set(x, y,
+          Math.min(255, (200 + bright * 55) | 0),
+          Math.min(255, (160 + bright * 60) | 0),
+          (20 + bright * 20) | 0
+        );
+      }
+    }
+  }
+  // Eye highlight
+  owl.set(ecx - 1, 14, 240, 240, 220);
+}
+
+// Beak
+owl.set(17, 18, 140, 120, 60);
+owl.set(16, 19, 120, 100, 50);
+owl.set(17, 19, 130, 110, 55);
+owl.set(18, 19, 120, 100, 50);
+
+// Feet/talons on branch
+for (const [fx, fy] of [[13,36],[14,37],[15,37],[19,36],[20,37],[21,37]]) {
+  owl.set(fx, fy, 140, 120, 60);
+}
+
+autoShade(owl, 0.1);
+edgeOutline(owl, 0.28);
+render(owl, 'owl', 5, '#0a0a18');
+
+// ================================================================
+//  ANIMAL 4: SNAIL (40 × 32)
+// ================================================================
+const snl = new PB(40, 32);
+
+const NP = {
+  shell:  ['#a08060','#8a6a48','#b89878','#c0a888','#907050'].map(hex),
+  shellDk:['#6a4a30','#5a3a20','#7a5a40'].map(hex),
+  body:   ['#7a8a70','#6a7a60','#8a9a80','#5a6a50'].map(hex),
+  bodyLt: ['#9aaa90','#8a9a80','#a0b0a0'].map(hex),
+  grass:  ['#4a8c30','#3a7020','#5aa040'].map(hex),
+  moss:   ['#3a6a28','#2a5a18','#4a7a30'].map(hex),
+};
+
+// Ground (mossy)
+for (let y = 26; y < 32; y++) for (let x = 0; x < 40; x++) {
+  const isMoss = H(x * 3, y * 5) > 0.4;
+  snl.setC(x, y, nz(pk(isMoss ? NP.moss : NP.grass, x*2, y*3), x, y, 10));
+}
+
+// Slime trail (subtle sheen on ground behind snail)
+for (let x = 2; x < 14; x++) {
+  const ty = 26 + Math.floor(H(x, 555) * 2);
+  const c = snl.get(x, ty);
+  if (c) snl.setC(x, ty, lt(c, 0.12 + H(x, 666) * 0.08));
+}
+
+// Body (elongated blob, extends left from shell)
+texSmooth(snl, (x, y) => {
+  // Main body
+  if (inE(x, y, 14, 23, 12, 4)) return true;
+  // Head
+  if (inE(x, y, 4, 21, 4, 3.5)) return true;
+  // Neck connecting head to body
+  if (x >= 4 && x <= 16 && inE(x, y, 10, 22, 8, 3.5)) return true;
+  return false;
+}, 0, 17, 28, 27, NP.bodyLt, NP.body);
+
+// Foot/sole (slightly darker underneath)
+for (let x = 3; x < 26; x++) {
+  if (snl.has(x, 25)) snl.setC(x, 25, nz(pk(NP.body, x, 25), x, 25, 6));
+  if (snl.has(x, 26)) {
+    const c = snl.get(x, 26);
+    if (c) snl.setC(x, 26, dk(c, 0.1));
+  }
+}
+
+// Shell (spiral)
+texSpiral(snl, 24, 15, 10, NP.shell, 2.5);
+
+// Shell opening (where body meets shell)
+for (let y = 19; y < 26; y++) {
+  if (inE(15, y, 16, 22, 3, 4)) {
+    snl.setC(15, y, nz(pk(NP.shellDk, 15, y), 15, y, 6));
+  }
+}
+
+// Antennae (two stalks)
+// Left antenna (longer, with eye)
+for (let y = 14; y < 20; y++) {
+  const ax = 3 + (20 - y) * 0.15;
+  snl.setC(Math.round(ax), y, nz(pk(NP.body, 3, y), 3, y, 5));
+}
+snl.set(2, 14, 30, 30, 30); // eye tip
+
+// Right antenna (shorter)
+for (let y = 16; y < 20; y++) {
+  const ax = 6 - (20 - y) * 0.1;
+  snl.setC(Math.round(ax), y, nz(pk(NP.body, 6, y), 6, y, 5));
+}
+snl.set(6, 16, 30, 30, 30); // eye tip
+
+// Mouth
+snl.set(2, 22, 90, 70, 60);
+
+// Small mushroom near snail
+snl.setC(36, 25, nz(hex('#d04040'), 36, 25, 8));
+snl.setC(35, 25, nz(hex('#c03838'), 35, 25, 8));
+snl.setC(37, 25, nz(hex('#c03838'), 37, 25, 8));
+snl.setC(36, 26, nz(hex('#e8d8c0'), 36, 26, 6));
+
+// Small leaf
+for (let x = 32; x < 35; x++) for (let y = 24; y < 26; y++)
+  if (H(x, y * 99) > 0.3)
+    snl.setC(x, y, nz(pk(NP.grass, x, y), x, y, 8));
+
+autoShade(snl, 0.1);
+edgeOutline(snl, 0.28);
+render(snl, 'snail', 6, '#c0c0b8');
+
+})();
+</script>
+</body>
+</html>

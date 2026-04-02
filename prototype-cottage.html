@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Procedural Pixel Art Engine · Cottage Tileset Prototype</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    min-height:100vh; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:28px;
+    background:#1a1a2e; font-family:'Courier New',monospace; color:#888;
+    padding:40px 20px;
+  }
+  canvas { image-rendering:pixelated; image-rendering:crisp-edges; }
+  h1 { font-size:16px; letter-spacing:3px; color:#aaa; }
+  .row { display:flex; gap:24px; align-items:flex-end; flex-wrap:wrap; justify-content:center; }
+  .asset { text-align:center; }
+  .asset span { display:block; margin-top:8px; font-size:11px; color:#555; }
+  .note {
+    font-size:12px; color:#555; max-width:650px;
+    text-align:center; line-height:1.8;
+  }
+  .tag {
+    display:inline-block; background:#2a2a4e; color:#7a7aaa;
+    padding:2px 8px; border-radius:3px; font-size:10px; margin:2px;
+  }
+  .decl {
+    background:#0d0d1a; border:1px solid #2a2a4e; border-radius:6px;
+    padding:16px 20px; max-width:600px; width:100%;
+    font-size:11px; color:#6a6a9a; line-height:1.6;
+    white-space:pre; overflow-x:auto;
+  }
+  .decl .k { color:#e94560; }
+  .decl .s { color:#5aA040; }
+  .decl .c { color:#555; }
+</style>
+</head>
+<body>
+
+<h1>PROCEDURAL PIXEL ART ENGINE</h1>
+
+<canvas id="cottage"></canvas>
+
+<div class="row">
+  <div class="asset"><canvas id="bush"></canvas><span>Bush &middot; Foliage</span></div>
+  <div class="asset"><canvas id="stump"></canvas><span>Stump &middot; Wood</span></div>
+  <div class="asset"><canvas id="rock"></canvas><span>Rock &middot; Stone</span></div>
+  <div class="asset"><canvas id="fence"></canvas><span>Fence &middot; Wood</span></div>
+</div>
+
+<div class="decl"><span class="c">// What the LLM declares (compact):</span>
+{ <span class="k">type</span>: <span class="s">"cottage"</span>, <span class="k">size</span>: [80, 85],
+  <span class="k">layers</span>: [
+    { <span class="k">region</span>: <span class="s">"rect"</span>, <span class="k">bounds</span>: [12,47,68,74], <span class="k">material</span>: <span class="s">"stone_wall"</span> },
+    { <span class="k">region</span>: <span class="s">"triangle"</span>, <span class="k">verts</span>: [[40,14],[4,48],[76,48]], <span class="k">material</span>: <span class="s">"roof_tiles"</span> },
+    { <span class="k">region</span>: <span class="s">"triangle"</span>, <span class="k">verts</span>: [[40,20],[16,46],[64,46]], <span class="k">material</span>: <span class="s">"stucco"</span> },
+    { <span class="k">region</span>: <span class="s">"arch_rect"</span>, <span class="k">bounds</span>: [34,56,46,74], <span class="k">material</span>: <span class="s">"wood_door"</span> },
+    { <span class="k">region</span>: <span class="s">"rect"</span>, <span class="k">bounds</span>: [56,6,63,48], <span class="k">material</span>: <span class="s">"chimney_brick"</span> },
+  ]
+} <span class="c">// Engine auto-fills textures + shading</span></div>
+
+<div class="note">
+  <span class="tag">Voronoi Stone</span>
+  <span class="tag">Offset-Grid Tiles</span>
+  <span class="tag">Fractal Foliage</span>
+  <span class="tag">Wood Grain</span>
+  <span class="tag">Auto-Shading</span>
+  <span class="tag">Edge Outline</span>
+  <br>
+  LLM declares regions + materials &rarr; Engine fills procedural textures + auto-shading &rarr; Zero per-pixel specification
+</div>
+
+<script>
+// ================================================================
+//  PROCEDURAL PIXEL ART ENGINE — Prototype
+//  Core idea: LLM declares shape regions + material types,
+//  the engine procedurally fills textures, shading, and outlines.
+// ================================================================
+(() => {
+'use strict';
+
+// ============ PIXEL BUFFER ============
+class PB {
+  constructor(w, h) {
+    this.w = w; this.h = h;
+    this.rgb = new Uint8ClampedArray(w * h * 3);
+    this.mask = new Uint8Array(w * h);
+  }
+  set(x, y, r, g, b) {
+    x |= 0; y |= 0;
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h) return;
+    const i = (y * this.w + x) * 3;
+    this.rgb[i] = r; this.rgb[i+1] = g; this.rgb[i+2] = b;
+    this.mask[y * this.w + x] = 1;
+  }
+  setC(x, y, c) { this.set(x, y, c[0], c[1], c[2]); }
+  get(x, y) {
+    x |= 0; y |= 0;
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h) return null;
+    if (!this.mask[y * this.w + x]) return null;
+    const i = (y * this.w + x) * 3;
+    return [this.rgb[i], this.rgb[i+1], this.rgb[i+2]];
+  }
+  has(x, y) {
+    x |= 0; y |= 0;
+    return x >= 0 && x < this.w && y >= 0 && y < this.h && this.mask[y * this.w + x] === 1;
+  }
+}
+
+// ============ DETERMINISTIC HASH ============
+function H(x, y) {
+  let n = ((x | 0) * 374761393 + (y | 0) * 668265263 + 1013904223) | 0;
+  n = (((n >> 13) ^ n) * 1274126177) | 0;
+  return (((n >> 16) ^ n) >>> 0) / 4294967296;
+}
+
+// ============ COLOR UTILITIES ============
+function hex(s) {
+  return [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+}
+function dk(c, a) { return c.map(v => Math.max(0, (v * (1 - a)) | 0)); }
+function lt(c, a) { return c.map(v => Math.min(255, (v + (255 - v) * a) | 0)); }
+function nz(c, x, y, r) {
+  const n = (H(x * 7, y * 13) - 0.5) * r;
+  return c.map(v => Math.max(0, Math.min(255, (v + n) | 0)));
+}
+function pk(arr, x, y) {
+  return [...arr[Math.floor(H(x, y) * arr.length) % arr.length]];
+}
+
+// ============ GEOMETRY ============
+function inTri(px, py, x1, y1, x2, y2, x3, y3) {
+  const d1 = (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
+  const d2 = (px - x3) * (y2 - y3) - (x2 - x3) * (py - y3);
+  const d3 = (px - x1) * (y3 - y1) - (x3 - x1) * (py - y1);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+
+// ============ PALETTES ============
+const P = {
+  stone:   ['#5a6670','#4e5c66','#6a7680','#556070','#607080'].map(hex),
+  mortar:  hex('#3a3c44'),
+  roof:    ['#b83030','#a82828','#c83838','#9a2828','#ce3e3e'].map(hex),
+  wood:    ['#5a3520','#6b4530','#7b5540','#4a2a18'].map(hex),
+  wdlt:    ['#8b6040','#9b7050','#7b5535','#a08060'].map(hex),
+  stucco:  ['#e8d8c0','#ddd0b8','#f0e0c8','#d8c8b0'].map(hex),
+  glass:   ['#4060c0','#5070d0','#3050b0','#6080e0'].map(hex),
+  chim:    ['#3a4050','#4a5060','#2a3040','#455565'].map(hex),
+  grass:   ['#4a8c30','#3a7020','#5aa040','#2a5a10','#60a848'].map(hex),
+  dirt:    ['#8a7660','#7a6650','#9a8670'].map(hex),
+  path:    ['#c8b8a0','#b8a890','#d0c0a8','#a89880'].map(hex),
+  foliage: ['#3a8020','#4a9030','#2a6a10','#5aa040','#60b048'].map(hex),
+  folDk:   ['#2a5a10','#1a4a08','#3a6a18'].map(hex),
+  bark:    ['#4a3020','#3a2818','#5a4030','#6a5040'].map(hex),
+  rockGr:  ['#7a7a78','#6a6a68','#8a8a88','#5a5a58','#9a9a98'].map(hex),
+};
+
+// ================================================================
+//  PROCEDURAL TEXTURE GENERATORS
+// ================================================================
+
+// Stone wall: Voronoi cells with mortar joints
+function texStone(pb, x1, y1, x2, y2, pal, csz, mw, mc) {
+  mc = mc || P.mortar;
+  const centers = [];
+  const cols = Math.ceil((x2 - x1) / csz) + 2;
+  const rows = Math.ceil((y2 - y1) / csz) + 2;
+  for (let gy = -1; gy <= rows; gy++)
+    for (let gx = -1; gx <= cols; gx++)
+      centers.push({
+        x: x1 + (gx + 0.5) * csz + (H(gx + 111, gy + 222) - 0.5) * csz * 0.65,
+        y: y1 + (gy + 0.5) * csz + (H(gx + 333, gy + 444) - 0.5) * csz * 0.5,
+        c: Math.floor(H(gx + 555, gy + 666) * pal.length) % pal.length
+      });
+
+  for (let y = y1; y < y2; y++) {
+    for (let x = x1; x < x2; x++) {
+      let d1 = 1e9, d2 = 1e9, ni = 0;
+      for (let i = 0; i < centers.length; i++) {
+        // Weighted Manhattan distance for blocky stone feel
+        const d = Math.abs(x - centers[i].x) * 1.05 + Math.abs(y - centers[i].y) * 0.9;
+        if (d < d1) { d2 = d1; d1 = d; ni = i; }
+        else if (d < d2) d2 = d;
+      }
+      const edge = d2 - d1;
+      if (edge < mw) {
+        pb.setC(x, y, nz([...mc], x, y, 8));
+      } else {
+        let c = nz([...pal[centers[ni].c]], x, y, 10);
+        // Ambient occlusion near mortar
+        if (edge < mw + 1.5) c = dk(c, 0.12 * (1 - (edge - mw) / 1.5));
+        pb.setC(x, y, c);
+      }
+    }
+  }
+}
+
+// Roof tiles: offset grid with overlap shading
+function texTiles(pb, test, x1, y1, x2, y2, pal, tw, th) {
+  for (let y = y1; y < y2; y++) {
+    for (let x = x1; x < x2; x++) {
+      if (!test(x, y)) continue;
+      const row = Math.floor((y - y1) / th);
+      const off = (row & 1) * (tw >> 1);
+      const tx = (((x - x1 + off) % tw) + tw) % tw;
+      const ty = (y - y1) % th;
+      const col = Math.floor((x - x1 + off) / tw);
+
+      let c = [...pal[Math.floor(H(row * 97 + col, row * 31 + 77) * pal.length) % pal.length]];
+      if (ty >= th - 1) c = dk(c, 0.32);       // bottom overlap shadow
+      else if (ty === 0) c = lt(c, 0.06);       // top edge highlight
+      if (tx === 0 || tx === tw - 1) c = dk(c, 0.08); // side edges
+      pb.setC(x, y, nz(c, x, y, 5));
+    }
+  }
+}
+
+// Stucco/plaster fill (test = region function)
+function texStucco(pb, test, x1, y1, x2, y2, pal) {
+  for (let y = y1; y < y2; y++)
+    for (let x = x1; x < x2; x++)
+      if (test(x, y)) pb.setC(x, y, nz(pk(pal, x * 3, y * 5), x, y, 8));
+}
+
+// Wood grain (direction: 'v' or 'h')
+function texWood(pb, x1, y1, x2, y2, pal, dir) {
+  for (let y = y1; y < y2; y++)
+    for (let x = x1; x < x2; x++) {
+      const t = dir === 'v' ? (x - x1) / Math.max(1, x2 - x1) : (y - y1) / Math.max(1, y2 - y1);
+      const grain = Math.sin(t * 12 + H(0, Math.floor((dir === 'v' ? y : x) / 2)) * 2) * 0.5 + 0.5;
+      const ci = Math.min(pal.length - 1, Math.floor(grain * pal.length));
+      pb.setC(x, y, nz([...pal[ci]], x, y, 8));
+    }
+}
+
+// Foliage: elliptical blob with irregular edges
+function texFoliage(pb, cx, cy, rx, ry, palL, palD, density) {
+  density = density || 0.8;
+  for (let y = cy - ry - 1; y <= cy + ry + 1; y++) {
+    for (let x = cx - rx - 1; x <= cx + rx + 1; x++) {
+      const dx = (x - cx) / rx, dy = (y - cy) / ry;
+      const d = dx * dx + dy * dy;
+      const en = H(x * 5, y * 7) * 0.3;
+      if (d > 1.0 + en) continue;
+      if (d > 0.8 + en && H(x * 11, y * 13) > density) continue;
+
+      const isUpper = dy < -0.15 && H(x * 17, y * 19) > 0.35;
+      let c = isUpper ? pk(palL, x * 3, y * 5) : pk(palD, x * 3, y * 5);
+
+      // Depth shading
+      c = dk(c, ((dy + 1) / 2) * 0.2);
+      // Light from top-left
+      const lf = (-dx * 0.4 - dy * 0.4);
+      if (lf > 0) c = lt(c, lf * 0.12);
+      else c = dk(c, -lf * 0.08);
+      // Leaf highlights
+      if (H(x * 23, y * 29) > 0.9) c = lt(c, 0.2);
+
+      pb.setC(x, y, nz(c, x, y, 6));
+    }
+  }
+}
+
+// ================================================================
+//  POST-PROCESSING
+// ================================================================
+
+// Auto directional shading (light from top-left)
+function autoShade(pb, strength) {
+  const snap = new Uint8ClampedArray(pb.rgb);
+  for (let y = 0; y < pb.h; y++) {
+    for (let x = 0; x < pb.w; x++) {
+      if (!pb.has(x, y)) continue;
+      const i = (y * pb.w + x) * 3;
+      const c = [snap[i], snap[i + 1], snap[i + 2]];
+      const lx = x / pb.w, ly = y / pb.h;
+      const light = (0.5 - lx) * strength + (0.5 - ly) * strength * 0.6;
+      const adj = light > 0 ? lt(c, light) : dk(c, -light);
+      pb.set(x, y, ...adj);
+    }
+  }
+}
+
+// Edge outline (darken pixels adjacent to empty space)
+function edgeOutline(pb, amount) {
+  const snap = new Uint8ClampedArray(pb.rgb);
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  for (let y = 0; y < pb.h; y++) {
+    for (let x = 0; x < pb.w; x++) {
+      if (!pb.has(x, y)) continue;
+      let isEdge = false;
+      for (const [ex, ey] of dirs) {
+        if (!pb.has(x + ex, y + ey)) { isEdge = true; break; }
+      }
+      if (isEdge) {
+        const i = (y * pb.w + x) * 3;
+        pb.rgb[i]     = (snap[i]     * (1 - amount)) | 0;
+        pb.rgb[i + 1] = (snap[i + 1] * (1 - amount)) | 0;
+        pb.rgb[i + 2] = (snap[i + 2] * (1 - amount)) | 0;
+      }
+    }
+  }
+}
+
+// Local shadow (darken a rect region with falloff)
+function shadowRect(pb, x1, y1, x2, y2, amount, fadeDir) {
+  for (let y = y1; y < y2; y++) {
+    for (let x = x1; x < x2; x++) {
+      const c = pb.get(x, y);
+      if (!c) continue;
+      let fade = 1;
+      if (fadeDir === 'down') fade = 1 - (y - y1) / (y2 - y1);
+      else if (fadeDir === 'right') fade = 1 - (x - x1) / (x2 - x1);
+      pb.setC(x, y, dk(c, amount * fade));
+    }
+  }
+}
+
+// ================================================================
+//  RENDER TO CANVAS
+// ================================================================
+function render(pb, id, scale, bg) {
+  const cv = document.getElementById(id);
+  cv.width = pb.w * scale; cv.height = pb.h * scale;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = bg || '#c0c0b8';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  for (let y = 0; y < pb.h; y++) {
+    for (let x = 0; x < pb.w; x++) {
+      if (!pb.has(x, y)) continue;
+      const i = (y * pb.w + x) * 3;
+      ctx.fillStyle = `rgb(${pb.rgb[i]},${pb.rgb[i+1]},${pb.rgb[i+2]})`;
+      ctx.fillRect(x * scale, y * scale, scale, scale);
+    }
+  }
+}
+
+// ================================================================
+//  COTTAGE ASSET
+// ================================================================
+const cot = new PB(80, 85);
+
+// Roof Y at given X: peak(40,14), left(4,48), right(76,48)
+function roofY(x) {
+  return x <= 40
+    ? 14 + (48 - 14) * (40 - x) / (40 - 4)
+    : 14 + (48 - 14) * (x - 40) / (76 - 40);
+}
+
+// --- Layer 1: Ground ---
+for (let y = 74; y < 85; y++) {
+  for (let x = 0; x < 80; x++) {
+    const dp = (y - 74) / 11;
+    let c = H(x * 3, y * 5) > 0.65
+      ? nz(pk(P.dirt, x, y), x, y, 12)
+      : nz(pk(P.grass, x * 2, y * 3), x, y, 12);
+    if (dp > 0.4) c = dk(c, (dp - 0.4) * 0.3);
+    cot.setC(x, y, c);
+  }
+}
+// Grass blades above ground line
+for (let x = 0; x < 80; x++) {
+  if (H(x, 1111) < 0.45) {
+    const h = 1 + Math.floor(H(x, 2222) * 3);
+    for (let d = 0; d < h; d++) {
+      if (73 - d >= 0) cot.setC(x, 73 - d, nz(pk(P.grass, x, d + 777), x, 73 - d, 10));
+    }
+  }
+}
+
+// --- Layer 2: Cobblestone path to door ---
+texStone(cot, 34, 74, 46, 85, P.path, 4, 0.8, hex('#9a8a70'));
+
+// --- Layer 3: Stone wall ---
+texStone(cot, 12, 47, 68, 74, P.stone, 6, 1.1);
+
+// --- Layer 4: Roof tiles (full outer triangle) ---
+texTiles(cot,
+  (x, y) => inTri(x, y, 40, 14, 4, 48, 76, 48),
+  4, 14, 76, 48, P.roof, 5, 3
+);
+
+// --- Layer 5: Stucco gable (inner triangle, overwrites roof center) ---
+texStucco(cot,
+  (x, y) => inTri(x, y, 40, 20, 16, 46, 64, 46),
+  16, 20, 64, 46, P.stucco
+);
+
+// Decorative wood beam at gable bottom
+for (let x = 16; x < 64; x++) {
+  const gy = 46;
+  if (inTri(x, gy, 40, 20, 16, 46, 64, 46)) {
+    cot.setC(x, gy, nz(hex('#6b4530'), x, gy, 4));
+  }
+}
+
+// --- Layer 6: Chimney (above roof line only) ---
+for (let y = 6; y < 48; y++) {
+  for (let x = 56; x < 63; x++) {
+    if (y >= roofY(x) + 1) continue; // below roof = hidden
+    // Brick pattern
+    const brickH = 3, brickW = 4;
+    const row = Math.floor((y - 6) / brickH);
+    const off = (row & 1) * 2;
+    const bx = ((x - 56 + off) % brickW + brickW) % brickW;
+    const isMortar = bx === 0 || (y - 6) % brickH === 0;
+    if (isMortar) {
+      cot.setC(x, y, nz(hex('#2a2c38'), x, y, 6));
+    } else {
+      cot.setC(x, y, nz(pk(P.chim, x * 3, y * 5), x, y, 8));
+    }
+  }
+}
+// Chimney cap (wider)
+for (let y = 4; y < 7; y++)
+  for (let x = 54; x < 65; x++)
+    cot.setC(x, y, nz(dk(pk(P.chim, x, y), 0.12), x, y, 6));
+// Smoke wisps
+[[58,3],[57,2],[59,1],[58,0]].forEach(([sx, sy]) => {
+  cot.set(sx, sy, 155, 155, 165);
+});
+
+// --- Layer 7: Roof ridge & trim ---
+for (let x = 36; x <= 44; x++) {
+  cot.setC(x, 14, dk(pk(P.roof, x, 14), 0.3));
+  if (x >= 37 && x <= 43) cot.setC(x, 15, dk(pk(P.roof, x, 15), 0.15));
+}
+// Eave bottom
+for (let x = 4; x < 76; x++)
+  cot.setC(x, 47, nz(hex('#5a3520'), x, 47, 5));
+// Wall-roof junction wood beam
+for (let x = 12; x < 68; x++)
+  cot.setC(x, 46, nz(hex('#6b4530'), x, 46, 4));
+
+// --- Layer 8: Door (arched) ---
+const dL = 34, dR = 46, dTop = 56, dBot = 74;
+const dCx = (dL + dR) / 2, dRad = (dR - dL) / 2;
+
+for (let y = Math.ceil(dTop - dRad); y < dBot; y++) {
+  for (let x = dL; x < dR; x++) {
+    // Check arch shape
+    let inside = y >= dTop;
+    if (!inside) {
+      const adx = x - dCx + 0.5, ady = y - dTop;
+      inside = adx * adx + ady * ady <= dRad * dRad;
+    }
+    if (!inside) continue;
+
+    // Frame detection
+    const distL = x - dL, distR = dR - 1 - x;
+    let isFrame = distL === 0 || distR === 0 || y === dBot - 1;
+    if (y < dTop) {
+      const dist = Math.sqrt((x - dCx + 0.5) ** 2 + (y - dTop) ** 2);
+      if (Math.abs(dist - dRad) < 1.3) isFrame = true;
+    }
+
+    if (isFrame) {
+      cot.setC(x, y, nz(hex('#3a1a08'), x, y, 5));
+    } else {
+      // Wood grain
+      const t = (x - dL) / (dR - dL);
+      const grain = Math.sin(t * 14 + H(0, Math.floor(y / 2)) * 2) * 0.5 + 0.5;
+      const ci = Math.min(P.wood.length - 1, Math.floor(grain * P.wood.length));
+      let c = nz([...P.wood[ci]], x, y, 7);
+      // Center divide
+      if (x === Math.floor(dCx)) c = dk(c, 0.25);
+      cot.setC(x, y, c);
+    }
+  }
+}
+// Door handle
+cot.setC(43, 65, hex('#c8a840'));
+cot.setC(43, 66, hex('#a88830'));
+
+// --- Layer 9: Windows ---
+function drawWin(pb, x1, y1, x2, y2) {
+  for (let y = y1; y < y2; y++) {
+    for (let x = x1; x < x2; x++) {
+      const edge = x === x1 || x === x2 - 1 || y === y1 || y === y2 - 1;
+      const mx = (x1 + x2) >> 1, my = (y1 + y2) >> 1;
+      const cross = x === mx || y === my;
+      if (edge) {
+        pb.setC(x, y, nz(hex('#4a2a18'), x, y, 4));
+      } else if (cross) {
+        pb.setC(x, y, nz(hex('#6b4530'), x, y, 4));
+      } else {
+        const tx = (x - x1) / (x2 - x1), ty = (y - y1) / (y2 - y1);
+        let c = pk(P.glass, x * 3, y * 7);
+        if (tx < 0.4 && ty < 0.4) c = lt(c, 0.25);
+        else if (tx > 0.6 && ty > 0.6) c = dk(c, 0.15);
+        pb.setC(x, y, c);
+      }
+    }
+  }
+  // Window sill
+  for (let x = x1 - 1; x <= x2; x++)
+    pb.setC(x, y2, nz(hex('#6b4530'), x, y2, 4));
+}
+
+drawWin(cot, 18, 53, 28, 64);  // left window
+drawWin(cot, 52, 53, 62, 64);  // right window
+drawWin(cot, 37, 28, 43, 36);  // gable window
+
+// --- Layer 10: Shadows ---
+// Under-roof shadow on wall
+shadowRect(cot, 12, 48, 68, 51, 0.18, 'down');
+// Ground shadow (right)
+shadowRect(cot, 68, 74, 78, 80, 0.15, 'right');
+// Under-eave shadow on stucco
+shadowRect(cot, 16, 20, 64, 23, 0.10, 'down');
+
+// --- Post-processing ---
+autoShade(cot, 0.12);
+edgeOutline(cot, 0.32);
+
+render(cot, 'cottage', 6, '#c0c0b8');
+
+// ================================================================
+//  SMALL ASSETS (same engine, different textures)
+// ================================================================
+
+// ---- Bush (24x24) ----
+const bush = new PB(24, 24);
+// Ground
+for (let y = 20; y < 24; y++)
+  for (let x = 0; x < 24; x++)
+    bush.setC(x, y, nz(pk(P.grass, x, y), x, y, 10));
+// Trunk
+texWood(bush, 10, 17, 14, 22, P.bark, 'v');
+// Foliage blob
+texFoliage(bush, 12, 11, 10, 9, P.foliage, P.folDk, 0.8);
+autoShade(bush, 0.1);
+edgeOutline(bush, 0.3);
+render(bush, 'bush', 6, '#c0c0b8');
+
+// ---- Tree stump (20x22) ----
+const stump = new PB(20, 22);
+// Ground
+for (let y = 18; y < 22; y++)
+  for (let x = 0; x < 20; x++)
+    stump.setC(x, y, nz(pk(P.grass, x, y), x, y, 10));
+// Stump body (bark texture)
+texWood(stump, 6, 10, 14, 20, P.bark, 'v');
+// Top surface (wood rings)
+for (let y = 8; y < 12; y++) {
+  for (let x = 5; x < 15; x++) {
+    const adx = (x - 10) / 5, ady = (y - 9.5) / 2;
+    const d = Math.sqrt(adx * adx + ady * ady);
+    if (d > 1.1) continue;
+    const ring = Math.sin(d * 8) * 0.5 + 0.5;
+    const ci = Math.min(P.wdlt.length - 1, Math.floor(ring * P.wdlt.length));
+    let c = [...P.wdlt[ci]];
+    if (d > 0.85) c = dk(c, 0.35); // bark ring edge
+    stump.setC(x, y, nz(c, x, y, 6));
+  }
+}
+// Grass around base
+for (let x = 4; x < 16; x++) {
+  if (H(x, 3333) < 0.5) {
+    const gy = 17 + (H(x, 4444) > 0.5 ? 0 : 1);
+    stump.setC(x, gy, nz(pk(P.grass, x, gy + 100), x, gy, 8));
+  }
+}
+autoShade(stump, 0.1);
+edgeOutline(stump, 0.3);
+render(stump, 'stump', 6, '#c0c0b8');
+
+// ---- Rock (22x18) ----
+const rock = new PB(22, 18);
+// Ground
+for (let y = 14; y < 18; y++)
+  for (let x = 0; x < 22; x++)
+    rock.setC(x, y, nz(pk(P.grass, x, y), x, y, 10));
+// Rock body (elliptical with irregular edges)
+for (let y = 4; y < 16; y++) {
+  for (let x = 3; x < 19; x++) {
+    const adx = (x - 11) / 8, ady = (y - 10) / 6;
+    const d = adx * adx + ady * ady;
+    const en = H(x * 5, y * 7) * 0.2;
+    if (d > 1.0 + en) continue;
+    if (d > 0.85 + en && H(x * 11, y * 13) > 0.7) continue;
+
+    let c = pk(P.rockGr, x * 3, y * 5);
+    // Depth + directional light
+    c = dk(c, ((ady + 1) / 2) * 0.22);
+    if (adx < -0.2 && ady < -0.2) c = lt(c, 0.12);
+    // Surface highlights
+    if (H(x * 23, y * 29) > 0.92) c = lt(c, 0.18);
+    rock.setC(x, y, nz(c, x, y, 6));
+  }
+}
+autoShade(rock, 0.1);
+edgeOutline(rock, 0.3);
+render(rock, 'rock', 6, '#c0c0b8');
+
+// ---- Fence (28x22) ----
+const fence = new PB(28, 22);
+// Ground
+for (let y = 18; y < 22; y++)
+  for (let x = 0; x < 28; x++)
+    fence.setC(x, y, nz(pk(P.grass, x, y), x, y, 10));
+// Posts
+[4, 14, 24].forEach(px => {
+  texWood(fence, px - 1, 4, px + 2, 19, P.bark, 'v');
+  // Rounded post cap
+  fence.setC(px, 3, nz(pk(P.bark, px, 3), px, 3, 6));
+  fence.setC(px - 1, 4, nz(lt(pk(P.bark, px - 1, 4), 0.1), px - 1, 4, 5));
+  fence.setC(px + 1, 4, nz(lt(pk(P.bark, px + 1, 4), 0.1), px + 1, 4, 5));
+});
+// Cross beams
+for (let x = 4; x < 26; x++) {
+  [8, 9, 14, 15].forEach(by => {
+    fence.setC(x, by, nz(pk(P.bark, x, by), x, by, 6));
+  });
+}
+autoShade(fence, 0.1);
+edgeOutline(fence, 0.3);
+render(fence, 'fence', 6, '#c0c0b8');
+
+})();
+</script>
+</body>
+</html>

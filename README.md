@@ -37,13 +37,14 @@ The AI auto-decides everything: palette, detail level, rendering method, shading
 
 ### Capabilities at a glance
 
-| Size Range | What it can do |
-|-----------|----------------|
-| **8×8** | Icons, emojis, game items (sword, potion, key, chest) |
-| **12–16px** | Character sprites, avatars, simple creatures |
-| **24–32px** | Detailed characters with outfits, weapons, accessories |
-| **48px+** | Complex illustrations with sub-pixel shading |
-| **96–256px** | Full procedural landscapes, cityscapes, world landmarks |
+| Size Range | What it can do | Rendering |
+|-----------|----------------|-----------|
+| **8×8** | Icons, emojis, game items (sword, potion, key, chest) | CSS box-shadow |
+| **12–16px** | Character sprites, avatars, simple creatures | CSS Grid + JS |
+| **24–32px** | Detailed characters with outfits, weapons, accessories | CSS Grid + JS |
+| **48px+** | Complex illustrations with sub-pixel shading | CSS Grid + JS |
+| **48–96px** | Game assets, buildings, animals, tilesets | Procedural texture engine |
+| **96–256px** | Full procedural landscapes, cityscapes, world landmarks | Canvas + FBM noise |
 
 ---
 
@@ -72,9 +73,17 @@ cp -r yoyopixel/.claude/skills/pixelart ~/.claude/skills/
 /pixelart 32x32, cyberpunk cat with neon goggles
 /pixelart 192x128, mountain sunset with lake reflection
 /pixelart 24x24, ancient Chinese swordsman in moonlight
+/pixelart 80x85, stone cottage with red tile roof
+/pixelart 50x40, a fox sitting in grass
 ```
 
 Two inputs: **size** + **prompt**. That's the entire interface.
+
+Claude auto-decides everything based on size and prompt:
+- **Size** determines detail level, max colors, and shading complexity
+- **Prompt content** determines rendering method (CSS Grid, Canvas landscape, or procedural texture engine)
+- **Keywords** trigger auto-animations (weapon → gleam, night → stars, fire → embers)
+- **Subject type** selects texture algorithms (building → stone/tiles, animal → fur/scales/feathers)
 
 ---
 
@@ -110,6 +119,16 @@ Two inputs: **size** + **prompt**. That's the entire interface.
 </tr>
 </table>
 
+### Procedural Texture Engine (NEW)
+
+Game-ready assets using region-based procedural textures:
+
+- **[Stone Cottage](prototype-cottage.html)** — Voronoi stone walls, offset-grid roof tiles, stucco gable, arched wood door, glass windows + 4 small tileset assets (bush, stump, rock, fence)
+- **[Style Gallery](prototype-gallery.html)** — Wizard tower with magic glow, sakura tree, treasure chest, village well
+- **[Animals](prototype-animals.html)** — Fox (fur strands), koi fish (scales), owl (feathers), snail (spiral shell)
+
+12 procedural texture algorithms: stone, tiles, stucco, wood, planks, bark, foliage, fur, scales, feathers, spiral, smooth
+
 ### Multi-Size Gallery
 
 <p align="center">
@@ -144,6 +163,18 @@ const wizard = {
 ```
 
 Rendered via **CSS Grid** (per-pixel animation) or **CSS box-shadow** (zero JS, pure CSS).
+
+### Medium art (48–96px): Procedural texture engine
+
+For game assets, buildings, creatures — the LLM declares **regions + materials**, the engine fills textures automatically:
+
+```
+Region-based: { shape: "rect", bounds: [12,47,68,74], material: "stone_wall" }
+12 texture types: stone, tiles, wood, bark, foliage, fur, scales, feathers, spiral...
+Auto post-processing: directional shading → edge outline → local shadows → glow
+```
+
+No per-pixel specification needed for surfaces. One engine generates cottages, towers, trees, foxes, owls, treasure chests — all with consistent style.
 
 ### Large art (≥64px): Canvas-based procedural generation
 
@@ -196,10 +227,13 @@ Full decision rules → [`pixelart-skill.md`](pixelart-skill.md)
 | Component | Technology |
 |-----------|-----------|
 | Rendering (small) | CSS Grid / CSS box-shadow |
-| Rendering (large) | HTML5 Canvas + PixelBuffer |
+| Rendering (medium) | Canvas + Procedural texture engine |
+| Rendering (large) | Canvas + FBM noise + PixelBuffer |
 | Terrain generation | FBM (Fractal Brownian Motion) noise |
 | Mountain ridges | Ridge noise (abs-inverted FBM) |
 | Gradient dithering | Bayer 4×4 ordered dithering |
+| Surface textures | Voronoi stone, offset-grid tiles, wood grain, fur strands, fish scales, feather barbs, spiral shell (12 types) |
+| Post-processing | Auto-shading, edge outline, local shadows, radial glow |
 | Animation | CSS @keyframes + requestAnimationFrame |
 | Atmosphere | Pure CSS particles (rain, petals, embers, snow) |
 | Output | Self-contained HTML (zero external dependencies) |
@@ -225,7 +259,11 @@ pixelai/
 ├── swordsman.html            ← Moonlit swordsman scene
 ├── cyberpunk.html            ← Neon cyberpunk scene
 ├── dragon.html               ← Fire dragon scene
-└── icons.html                ← 8×8 icon collection
+├── icons.html                ← 8×8 icon collection
+│
+├── prototype-cottage.html    ★ Procedural texture engine: stone cottage + tileset
+├── prototype-gallery.html    ★ Style gallery: tower, sakura tree, chest, well
+└── prototype-animals.html    ★ Organic textures: fox, koi, owl, snail
 ```
 
 ---

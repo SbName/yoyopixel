@@ -32,6 +32,7 @@ You only receive **size** and **prompt**. Use the rules below to decide detail l
 | 32×32+          | detailed| 12–20     | Highlight + base + shadow, texture hints   |
 | 48×48+          | ultra   | 15–25     | Multi-layer shading, dithering gradients   |
 | 96×64+ (canvas) | ultra   | Unlimited | Procedural, FBM noise, Bayer dithering     |
+| 48×96+ (asset)  | ultra   | Unlimited | Procedural texture engine, region-based    |
 
 ### Step 2: Prompt → Rendering Method
 
@@ -42,7 +43,9 @@ Read the prompt and pick:
 | Simple icon / item / emoji     | **CSS box-shadow** (zero JS, static)   |
 | Character / sprite             | **CSS Grid + JS** (per-pixel control)  |
 | "animated", movement, effects  | **Grid + animation JS**                |
-| Landscape, scene, environment  | **Canvas** (procedural generation)     |
+| Landscape, scene, environment  | **Canvas** (procedural landscape)      |
+| Building, tileset, game asset  | **Canvas** (procedural texture engine) |
+| Animal, creature, organic      | **Canvas** (procedural organic textures)|
 
 ### Step 3: Prompt → Animations & Atmosphere
 
@@ -212,6 +215,70 @@ Use 3×5 for small canvas (≤16px), 5×7 for larger. Always 1px gap between cha
 | mist    | Translucent gradient div, slow horizontal drift             |
 | embers  | Small dots rising with `box-shadow` glow                    |
 | snow    | Small circles, slow fall + horizontal sway                  |
+
+---
+
+## Procedural Texture Engine (game assets, tilesets, creatures)
+
+When the prompt implies a **building**, **game asset**, **tileset**, or **creature** at sizes ≥48px, use the procedural texture engine. Instead of specifying every pixel, declare **regions + materials** and let the engine fill textures automatically.
+
+### How it works
+
+```
+LLM declares (compact):
+  { region: "rect", bounds: [12,47,68,74], material: "stone_wall" }
+  { region: "triangle", verts: [[40,14],[4,48],[76,48]], material: "roof_tiles" }
+
+Engine auto-fills:
+  → Procedural texture per material
+  → Auto-shading (directional light)
+  → Edge outline detection
+  → Local shadows
+```
+
+### Procedural Textures (12 types)
+
+| Texture | Algorithm | Use for |
+|---------|-----------|---------|
+| `texStone` | Voronoi cells + mortar joints | Stone walls, cobblestone, rock surfaces |
+| `texTiles` | Offset grid + overlap shading | Roof tiles, floor tiles, paving |
+| `texStucco` | Noisy flat fill | Plaster, stucco, painted walls |
+| `texWood` | Sin-wave grain pattern | Wood beams, door, furniture |
+| `texPlanks` | Horizontal boards + edge lines | Plank floors, chest body, siding |
+| `texBark` | Multi-frequency ridges + cracks | Tree trunks, branches |
+| `texFoliage` | Fractal blob + irregular edges | Bushes, tree canopy, hedges |
+| `texFur` | Directional strand pattern | Animal fur, hair |
+| `texScales` | Overlapping crescent grid | Fish, reptile, dragon scales |
+| `texFeathers` | V-shaft + barb layering | Bird plumage, wings |
+| `texSpiral` | Logarithmic spiral + dome shading | Snail shell, decorative spiral |
+| `texSmooth` | Gradient fill with noise | Smooth skin, fins, body |
+
+### Post-Processing Pipeline
+
+Applied after all regions are filled:
+
+1. **`autoShade(strength)`** — Global directional light from top-left
+2. **`edgeOutline(amount)`** — Darken pixels adjacent to empty space (outline effect)
+3. **`shadowRect(...)`** — Local shadow with directional falloff (under eaves, ground shadow)
+4. **`addGlow(cx, cy, radius, color, intensity)`** — Radial light emission (windows, magic)
+
+### Shape Definition
+
+Shapes are defined as composites of primitive tests:
+
+- **`inE(x, y, cx, cy, rx, ry)`** — Ellipse (body parts, rocks, foliage blobs)
+- **`inTri(x, y, ...verts)`** — Triangle (roofs, gables, ears)
+- **Rect** — Simple bounds check (walls, doors, windows)
+- **Composite** — Multiple primitives combined for complex organic shapes
+
+### Examples
+
+| Prompt | Engine produces |
+|--------|----------------|
+| `80x85, stone cottage with red roof` | Voronoi stone wall + offset-grid tiles + stucco gable + arched wood door + glass windows |
+| `48x90, wizard tower at night` | Dark stone + purple conical roof + glowing windows with addGlow + flag |
+| `50x40, fox sitting in grass` | Fur texture with per-zone direction angles + ellipse composite body |
+| `44x26, koi fish in pond` | Scale overlay + gradient fins + water ripple background |
 
 ---
 
