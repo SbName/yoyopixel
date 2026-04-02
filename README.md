@@ -96,6 +96,9 @@ Claude auto-decides everything based on size and prompt:
 | All-in-one Showcase | [sbname.github.io/yoyopixel/showcase.html](https://sbname.github.io/yoyopixel/showcase.html) |
 | Landscape Generator | [sbname.github.io/yoyopixel/landscape.html](https://sbname.github.io/yoyopixel/landscape.html) |
 | World Wonders | [sbname.github.io/yoyopixel/wonders.html](https://sbname.github.io/yoyopixel/wonders.html) |
+| Stone Cottage | [sbname.github.io/yoyopixel/prototype-cottage.html](https://sbname.github.io/yoyopixel/prototype-cottage.html) |
+| Style Gallery | [sbname.github.io/yoyopixel/prototype-gallery.html](https://sbname.github.io/yoyopixel/prototype-gallery.html) |
+| Animals | [sbname.github.io/yoyopixel/prototype-animals.html](https://sbname.github.io/yoyopixel/prototype-animals.html) |
 
 ### Characters & Scenes
 
@@ -121,11 +124,17 @@ Claude auto-decides everything based on size and prompt:
 
 ### Procedural Texture Engine (NEW)
 
-Game-ready assets using region-based procedural textures:
+Game-ready assets using region-based procedural textures — LLM declares regions + materials, engine auto-fills textures:
 
-- **[Stone Cottage](prototype-cottage.html)** — Voronoi stone walls, offset-grid roof tiles, stucco gable, arched wood door, glass windows + 4 small tileset assets (bush, stump, rock, fence)
-- **[Style Gallery](prototype-gallery.html)** — Wizard tower with magic glow, sakura tree, treasure chest, village well
-- **[Animals](prototype-animals.html)** — Fox (fur strands), koi fish (scales), owl (feathers), snail (spiral shell)
+<table>
+<tr>
+<td align="center"><b>Stone Cottage</b><br><sub>80×85 · Voronoi stone, offset-grid roof tiles, stucco, wood grain</sub><br><img src="assets/prototype-cottage.png" width="380"></td>
+<td align="center"><b>Style Gallery</b><br><sub>Wizard tower, sakura tree, treasure chest, village well</sub><br><img src="assets/prototype-gallery.png" width="380"></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><b>Organic Textures</b><br><sub>Fox (fur strands) · Koi (fish scales) · Owl (feather barbs) · Snail (spiral shell)</sub><br><img src="assets/prototype-animals.png" width="760"></td>
+</tr>
+</table>
 
 12 procedural texture algorithms: stone, tiles, stucco, wood, planks, bark, foliage, fur, scales, feathers, spiral, smooth
 
