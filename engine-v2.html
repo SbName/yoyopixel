@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YoYoPixel Engine v2 · Advanced Textures + Shading</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:24px;background:#0e0e1a;font-family:'Courier New',monospace;color:#888;padding:30px 20px}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges}
+  h1{font-size:15px;letter-spacing:3px;color:#aaa}
+  .row{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;align-items:flex-end}
+  .card{text-align:center;background:#12122a;border:1px solid #222244;border-radius:8px;padding:14px 14px 10px;transition:border-color .3s}
+  .card:hover{border-color:#e94560}
+  .card h2{font-size:11px;color:#666;letter-spacing:2px;margin-top:8px}
+  .tags{margin-top:4px}
+  .tag{display:inline-block;background:#1a1a3e;color:#5a5a8a;padding:1px 6px;border-radius:3px;font-size:9px;margin:1px}
+  .note{font-size:11px;color:#444;max-width:700px;text-align:center;line-height:1.8}
+</style>
+</head>
+<body>
+<h1>ENGINE V2 &middot; ADVANCED TEXTURES + SHADING</h1>
+
+<div class="row">
+  <div class="card"><canvas id="tent"></canvas><h2>MARKET TENT</h2>
+    <div class="tags"><span class="tag">texCloth</span><span class="tag">texWoven</span><span class="tag">Fold Shading</span></div></div>
+  <div class="card"><canvas id="weapons"></canvas><h2>WEAPON RACK</h2>
+    <div class="tags"><span class="tag">texMetal</span><span class="tag">Specular</span><span class="tag">Assembly</span></div></div>
+  <div class="card"><canvas id="sack"></canvas><h2>SACK &amp; BARREL</h2>
+    <div class="tags"><span class="tag">texCloth</span><span class="tag">texMetal</span><span class="tag">Contact Shadow</span></div></div>
+</div>
+<div class="row">
+  <div class="card"><canvas id="crystal"></canvas><h2>CRYSTAL CLUSTER</h2>
+    <div class="tags"><span class="tag">texCrystal</span><span class="tag">Inner Glow</span><span class="tag">Facets</span></div></div>
+  <div class="card"><canvas id="bones"></canvas><h2>BONE PILE</h2>
+    <div class="tags"><span class="tag">texBone</span><span class="tag">Cracks</span></div></div>
+  <div class="card"><canvas id="stall"></canvas><h2>FRUIT STALL</h2>
+    <div class="tags"><span class="tag">Assembly</span><span class="tag">blitAlpha</span><span class="tag">Multi-pass</span></div></div>
+</div>
+
+<div class="note">
+  Engine v2: RGBA pixel buffer · alpha-aware blit with contact shadows ·
+  3-pass shading (AO + directional + specular) · new shape primitives ·
+  6 new texture algorithms
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ================================================================
+//  ENGINE V2 — RGBA + Alpha Blit + Multi-pass Shading
+// ================================================================
+
+// ---- RGBA Pixel Buffer ----
+class PB {
+  constructor(w, h) {
+    this.w = w; this.h = h;
+    this.data = new Uint8ClampedArray(w * h * 4); // RGBA
+  }
+  set(x, y, r, g, b, a) {
+    x |= 0; y |= 0;
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h) return;
+    const i = (y * this.w + x) << 2;
+    this.data[i] = r; this.data[i+1] = g; this.data[i+2] = b; this.data[i+3] = a !== undefined ? a : 255;
+  }
+  setC(x, y, c, a) { this.set(x, y, c[0], c[1], c[2], a); }
+  get(x, y) {
+    x |= 0; y |= 0;
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h) return null;
+    const i = (y * this.w + x) << 2;
+    if (this.data[i+3] === 0) return null;
+    return [this.data[i], this.data[i+1], this.data[i+2], this.data[i+3]];
+  }
+  has(x, y) {
+    x |= 0; y |= 0;
+    return x >= 0 && x < this.w && y >= 0 && y < this.h && this.data[((y * this.w + x) << 2) + 3] > 0;
+  }
+  // Alpha blend src color onto existing pixel
+  blend(x, y, c, srcA) {
+    x |= 0; y |= 0;
+    if (x < 0 || x >= this.w || y < 0 || y >= this.h) return;
+    const i = (y * this.w + x) << 2;
+    const dstA = this.data[i+3] / 255;
+    const sA = (srcA !== undefined ? srcA : 255) / 255;
+    const outA = sA + dstA * (1 - sA);
+    if (outA === 0) return;
+    this.data[i]   = ((c[0] * sA + this.data[i]   * dstA * (1-sA)) / outA) | 0;
+    this.data[i+1] = ((c[1] * sA + this.data[i+1] * dstA * (1-sA)) / outA) | 0;
+    this.data[i+2] = ((c[2] * sA + this.data[i+2] * dstA * (1-sA)) / outA) | 0;
+    this.data[i+3] = (outA * 255) | 0;
+  }
+}
+
+// ---- Alpha-aware blit with contact shadow ----
+function blitAlpha(src, dst, dx, dy, opts) {
+  opts = opts || {};
+  const globalA = opts.alpha !== undefined ? opts.alpha : 1;
+  const shadow = opts.contactShadow || false;
+  const sOff = opts.shadowOffset || [1, 2];
+  const sAlpha = opts.shadowAlpha || 0.2;
+
+  // Contact shadow pass first (drawn behind)
+  if (shadow) {
+    for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) {
+      if (!src.has(x, y)) continue;
+      const sx = dx + x + sOff[0], sy = dy + y + sOff[1];
+      dst.blend(sx, sy, [0, 0, 0], (sAlpha * 255) | 0);
+    }
+  }
+  // Main blit with alpha
+  for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) {
+    const c = src.get(x, y);
+    if (!c) continue;
+    const a = (c[3] * globalA) | 0;
+    if (a >= 250) dst.set(dx + x, dy + y, c[0], c[1], c[2], 255);
+    else dst.blend(dx + x, dy + y, c, a);
+  }
+}
+
+// Simple opaque blit (faster for most cases)
+function blit(src, dst, dx, dy) {
+  for (let y = 0; y < src.h; y++) for (let x = 0; x < src.w; x++) {
+    const c = src.get(x, y); if (!c) continue;
+    dst.set(dx + x, dy + y, c[0], c[1], c[2], c[3]);
+  }
+}
+
+// ---- Hash ----
+function H(x, y) {
+  let n = ((x|0)*374761393 + (y|0)*668265263 + 1013904223)|0;
+  n = (((n>>13)^n)*1274126177)|0;
+  return (((n>>16)^n)>>>0) / 4294967296;
+}
+
+// ---- Color Utils ----
+function hx(s) { return [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)]; }
+function dk(c, a) { return c.map(v => Math.max(0, (v*(1-a))|0)); }
+function lt(c, a) { return c.map(v => Math.min(255, (v+(255-v)*a)|0)); }
+function nz(c, x, y, r) { const n = (H(x*7,y*13)-.5)*r; return c.map(v => Math.max(0, Math.min(255, (v+n)|0))); }
+function pk(a, x, y) { return [...a[Math.floor(H(x,y)*a.length)%a.length]]; }
+function lerp3(a, b, t) { return a.map((v,i) => (v + (b[i]-v)*t)|0); }
+
+// ---- Shape Primitives (expanded) ----
+function inE(x,y,cx,cy,rx,ry) { const dx=(x-cx)/rx, dy=(y-cy)/ry; return dx*dx+dy*dy<=1; }
+function inTri(px,py,x1,y1,x2,y2,x3,y3) {
+  const d1=(px-x2)*(y1-y2)-(x1-x2)*(py-y2), d2=(px-x3)*(y2-y3)-(x2-x3)*(py-y3), d3=(px-x1)*(y3-y1)-(x3-x1)*(py-y1);
+  return !((d1<0||d2<0||d3<0)&&(d1>0||d2>0||d3>0));
+}
+// NEW: Arbitrary polygon (winding number)
+function inPoly(px, py, verts) {
+  let inside = false;
+  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+    const xi = verts[i][0], yi = verts[i][1], xj = verts[j][0], yj = verts[j][1];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// NEW: Rounded rectangle
+function inRR(x, y, x1, y1, x2, y2, r) {
+  if (x < x1 || x >= x2 || y < y1 || y >= y2) return false;
+  // Check corners
+  const corners = [[x1+r,y1+r],[x2-r,y1+r],[x1+r,y2-r],[x2-r,y2-r]];
+  for (const [cx,cy] of corners) {
+    if ((x < x1+r || x >= x2-r) && (y < y1+r || y >= y2-r)) {
+      const dx = x-cx, dy = y-cy;
+      if (dx*dx + dy*dy > r*r) return false;
+    }
+  }
+  return true;
+}
+// NEW: Sinusoidal Y distortion (for cloth edges, organic forms)
+function distY(y, x, freq, amp, phase) { return y + Math.sin(x * freq + (phase||0)) * amp; }
+
+// ================================================================
+//  TEXTURE GENERATORS (existing + new)
+// ================================================================
+
+function texStone(pb,x1,y1,x2,y2,pal,csz,mw,mc) {
+  mc=mc||[50,52,58]; const centers=[]; const cols=Math.ceil((x2-x1)/csz)+2, rows=Math.ceil((y2-y1)/csz)+2;
+  for(let gy=-1;gy<=rows;gy++) for(let gx=-1;gx<=cols;gx++)
+    centers.push({x:x1+(gx+.5)*csz+(H(gx+111,gy+222)-.5)*csz*.65, y:y1+(gy+.5)*csz+(H(gx+333,gy+444)-.5)*csz*.5, c:Math.floor(H(gx+555,gy+666)*pal.length)%pal.length});
+  for(let y=y1;y<y2;y++) for(let x=x1;x<x2;x++) {
+    let d1=1e9,d2=1e9,ni=0;
+    for(let i=0;i<centers.length;i++){const d=Math.abs(x-centers[i].x)*1.05+Math.abs(y-centers[i].y)*.9;if(d<d1){d2=d1;d1=d;ni=i}else if(d<d2)d2=d}
+    const e=d2-d1; if(e<mw) pb.setC(x,y,nz([...mc],x,y,8));
+    else{let c=nz([...pal[centers[ni].c]],x,y,10);if(e<mw+1.5)c=dk(c,.12*(1-(e-mw)/1.5));pb.setC(x,y,c)}}
+}
+
+function texTiles(pb,test,x1,y1,x2,y2,pal,tw,th) {
+  for(let y=y1;y<y2;y++) for(let x=x1;x<x2;x++) {
+    if(!test(x,y))continue; const row=Math.floor((y-y1)/th),off=(row&1)*(tw>>1);
+    const tx=(((x-x1+off)%tw)+tw)%tw,ty=(y-y1)%th,col=Math.floor((x-x1+off)/tw);
+    let c=[...pal[Math.floor(H(row*97+col,row*31+77)*pal.length)%pal.length]];
+    if(ty>=th-1)c=dk(c,.32);else if(ty===0)c=lt(c,.06);if(tx===0||tx===tw-1)c=dk(c,.08);pb.setC(x,y,nz(c,x,y,5))}
+}
+
+function texWood(pb,x1,y1,x2,y2,pal,dir) {
+  for(let y=y1;y<y2;y++) for(let x=x1;x<x2;x++) {
+    const t=dir==='v'?(x-x1)/Math.max(1,x2-x1):(y-y1)/Math.max(1,y2-y1);
+    const g=Math.sin(t*12+H(0,Math.floor((dir==='v'?y:x)/2))*2)*.5+.5;
+    pb.setC(x,y,nz([...pal[Math.min(pal.length-1,Math.floor(g*pal.length))]],x,y,8))}
+}
+
+function texPlanks(pb,x1,y1,x2,y2,pal,ph) {
+  for(let y=y1;y<y2;y++) for(let x=x1;x<x2;x++) {
+    const row=Math.floor((y-y1)/ph),py2=(y-y1)%ph,t=(x-x1)/(x2-x1);
+    const g=Math.sin(t*10+H(row*77,0)*4+H(row,Math.floor(x/3))*.5)*.5+.5;
+    let c=[...pal[Math.min(pal.length-1,Math.floor(g*pal.length))]];
+    if(py2===0)c=dk(c,.25);const sh=(H(row*99,1)-.5)*12;c=c.map(v=>Math.max(0,Math.min(255,(v+sh)|0)));pb.setC(x,y,nz(c,x,y,6))}
+}
+
+function texFoliage(pb,cx,cy,rx,ry,palL,palD,dens) {
+  dens=dens||.8;for(let y=cy-ry-1;y<=cy+ry+1;y++) for(let x=cx-rx-1;x<=cx+rx+1;x++) {
+    const dx2=(x-cx)/rx,dy2=(y-cy)/ry,d=dx2*dx2+dy2*dy2,en=H(x*5,y*7)*.3;if(d>1+en)continue;if(d>.8+en&&H(x*11,y*13)>dens)continue;
+    const up=dy2<-.15&&H(x*17,y*19)>.35;let c=up?pk(palL,x*3,y*5):pk(palD,x*3,y*5);c=dk(c,((dy2+1)/2)*.2);
+    const lf=(-dx2*.4-dy2*.4);if(lf>0)c=lt(c,lf*.12);else c=dk(c,-lf*.08);if(H(x*23,y*29)>.9)c=lt(c,.2);pb.setC(x,y,nz(c,x,y,6))}
+}
+
+function texBark(pb,x1,y1,x2,y2,pal) {
+  for(let y=y1;y<y2;y++) for(let x=x1;x<x2;x++) {
+    const t=(x-x1)/(x2-x1),r1=Math.sin(t*18+H(0,Math.floor(y/3))*3)*.5+.5,r2=Math.sin(t*7+y*.15+H(1,Math.floor(y/5))*2)*.3;
+    let c=[...pal[Math.min(pal.length-1,Math.floor(Math.max(0,Math.min(1,r1+r2))*pal.length))]];
+    if(H(x*31,Math.floor(y/4)*17)<.08)c=dk(c,.4);pb.setC(x,y,nz(c,x,y,7))}
+}
+
+// ===================== NEW TEXTURES =====================
+
+// Cloth / Fabric — sinusoidal folds with light/shadow bands
+function texCloth(pb, test, x1,y1,x2,y2, pal, foldAngle, foldFreq, foldDepth) {
+  foldAngle = foldAngle || 0; // 0 = vertical folds, PI/2 = horizontal
+  foldFreq = foldFreq || 0.4;
+  foldDepth = foldDepth || 0.35;
+  const cos = Math.cos(foldAngle), sin = Math.sin(foldAngle);
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (test && !test(x, y)) continue;
+    // Project onto fold direction
+    const along = (x - x1) * cos + (y - y1) * sin;
+    const fold = Math.sin(along * foldFreq) * 0.5 + 0.5; // 0=valley, 1=peak
+
+    // 5-tone shading based on fold position
+    const toneIdx = Math.min(pal.length - 1, Math.floor(fold * pal.length));
+    let c = [...pal[toneIdx]];
+
+    // Add secondary micro-folds
+    const micro = Math.sin(along * foldFreq * 3.7 + 1.3) * 0.15;
+    if (micro > 0) c = lt(c, micro * foldDepth);
+    else c = dk(c, -micro * foldDepth);
+
+    // Cross-thread texture hint
+    const cross = -x * sin + y * cos;
+    if (Math.floor(cross) % 3 === 0) c = dk(c, 0.03);
+
+    pb.setC(x, y, nz(c, x, y, 4));
+  }
+}
+
+// Woven pattern — interlocking grid with geometric motifs
+function texWoven(pb, test, x1,y1,x2,y2, pal1, pal2, cellW, cellH) {
+  cellW = cellW || 4; cellH = cellH || 4;
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (test && !test(x, y)) continue;
+    const gx = Math.floor((x - x1) / cellW), gy = Math.floor((y - y1) / cellH);
+    const isWarp = (gx + gy) % 2 === 0;
+    const pal = isWarp ? pal1 : pal2;
+    let c = pk(pal, x * 3, y * 5);
+    // Cell edge darkening (thread boundary)
+    const cx2 = (x - x1) % cellW, cy2 = (y - y1) % cellH;
+    if (cx2 === 0 || cy2 === 0) c = dk(c, 0.12);
+    // Slight weave bump
+    if (isWarp && cy2 === 1) c = lt(c, 0.06);
+    if (!isWarp && cx2 === 1) c = lt(c, 0.06);
+    pb.setC(x, y, nz(c, x, y, 4));
+  }
+}
+
+// Metal — specular highlight band + ambient gradient
+function texMetal(pb, test, x1,y1,x2,y2, pal, specAngle, specWidth) {
+  specAngle = specAngle || -0.5; // angle of specular band
+  specWidth = specWidth || 0.12;
+  const cos = Math.cos(specAngle), sin = Math.sin(specAngle);
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (test && !test(x, y)) continue;
+    const nx = (x - x1) / Math.max(1, x2 - x1 - 1);
+    const ny = (y - y1) / Math.max(1, y2 - y1 - 1);
+
+    // Base tone from position (ambient gradient)
+    const ambient = nx * 0.3 + ny * 0.4; // darker bottom-right
+    const toneIdx = Math.min(pal.length - 1, Math.floor(ambient * pal.length));
+    let c = [...pal[toneIdx]];
+
+    // Specular band
+    const proj = nx * cos + ny * sin;
+    const specDist = Math.abs(proj - 0.35);
+    if (specDist < specWidth) {
+      const specIntensity = 1 - specDist / specWidth;
+      c = lt(c, specIntensity * 0.45);
+    }
+
+    // Secondary reflection
+    const spec2Dist = Math.abs(proj - 0.7);
+    if (spec2Dist < specWidth * 0.6) {
+      c = lt(c, (1 - spec2Dist / (specWidth * 0.6)) * 0.15);
+    }
+
+    // Hammered surface noise
+    if (H(x * 19, y * 23) > 0.9) c = lt(c, 0.08);
+    if (H(x * 31, y * 37) < 0.05) c = dk(c, 0.1);
+
+    pb.setC(x, y, nz(c, x, y, 3));
+  }
+}
+
+// Crystal — faceted with internal glow
+function texCrystal(pb, test, x1,y1,x2,y2, pal, glowColor, glowIntensity) {
+  glowIntensity = glowIntensity || 0.3;
+  const w = x2-x1, h = y2-y1, cx = x1+w/2, cy = y1+h/2;
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (test && !test(x, y)) continue;
+    const nx = (x-x1)/w, ny = (y-y1)/h;
+
+    // Facet determination (angular sectors)
+    const angle = Math.atan2(y-cy, x-cx);
+    const facet = Math.floor((angle + Math.PI) / (Math.PI * 2) * 6) % 6;
+    const facetBright = [0.3, 0.5, 0.8, 0.6, 0.2, 0.45][facet];
+
+    const toneIdx = Math.min(pal.length-1, Math.floor(facetBright * pal.length));
+    let c = [...pal[toneIdx]];
+
+    // Facet edge lines (bright)
+    const angleInFacet = ((angle + Math.PI) % (Math.PI / 3)) / (Math.PI / 3);
+    if (angleInFacet < 0.08 || angleInFacet > 0.92) c = lt(c, 0.25);
+
+    // Internal glow (stronger at center)
+    const dist = Math.sqrt((nx-0.5)**2 + (ny-0.5)**2) * 2;
+    const glow = Math.max(0, 1 - dist) * glowIntensity;
+    c = c.map((v,i) => Math.min(255, (v + glowColor[i] * glow)|0));
+
+    // Specular highlight (top-left)
+    if (nx < 0.35 && ny < 0.35) {
+      const specI = (1 - (nx + ny) / 0.7) * 0.3;
+      c = lt(c, Math.max(0, specI));
+    }
+
+    pb.setC(x, y, nz(c, x, y, 3));
+  }
+}
+
+// Bone — dry cracked organic material
+function texBone(pb, test, x1,y1,x2,y2, pal) {
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    if (test && !test(x, y)) continue;
+    const nx = (x-x1) / Math.max(1, x2-x1);
+    const ny = (y-y1) / Math.max(1, y2-y1);
+
+    // Smooth base gradient (lighter at top)
+    const baseT = ny * 0.6 + nx * 0.2;
+    const ci = Math.min(pal.length-1, Math.floor(baseT * pal.length));
+    let c = [...pal[ci]];
+
+    // Longitudinal cracks
+    const crackVal = Math.sin(ny * 20 + H(Math.floor(nx * 5), 0) * 4);
+    if (Math.abs(crackVal) < 0.1) c = dk(c, 0.2);
+
+    // Surface pitting
+    if (H(x * 41, y * 43) > 0.93) c = dk(c, 0.15);
+    // Highlight spots
+    if (H(x * 53, y * 59) > 0.95) c = lt(c, 0.12);
+
+    pb.setC(x, y, nz(c, x, y, 4));
+  }
+}
+
+// Rope — twisted strand pattern
+function texRope(pb, x1,y1, x2,y2, pal, thickness) {
+  const cx = (x1+x2)/2, w = x2-x1;
+  for (let y = y1; y < y2; y++) for (let x = x1; x < x2; x++) {
+    const dx = Math.abs(x - cx);
+    if (dx > thickness) continue;
+    // Twist pattern
+    const twist = Math.sin(y * 0.8 + dx * 0.5) * 0.5 + 0.5;
+    const ci = Math.min(pal.length-1, Math.floor(twist * pal.length));
+    let c = [...pal[ci]];
+    // Edge darkening (round cross-section)
+    const edgeFactor = dx / thickness;
+    c = dk(c, edgeFactor * edgeFactor * 0.3);
+    // Strand separation lines
+    if (Math.floor(y * 0.5 + dx * 2) % 3 === 0) c = dk(c, 0.08);
+    pb.setC(x, y, nz(c, x, y, 5));
+  }
+}
+
+// Coral / Vine — recursive branching
+function texCoral(pb, sx, sy, angle, len, thickness, pal, depth) {
+  if (depth <= 0 || len < 2) return;
+  const ex = sx + Math.cos(angle) * len;
+  const ey = sy + Math.sin(angle) * len;
+  // Draw branch
+  const steps = Math.ceil(len);
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const bx = sx + (ex - sx) * t;
+    const by = sy + (ey - sy) * t;
+    const w = thickness * (1 - t * 0.5);
+    for (let dx = -w; dx <= w; dx++) {
+      const px = Math.round(bx + dx), py = Math.round(by);
+      let c = pk(pal, px * 3 + depth, py * 5);
+      c = dk(c, (Math.abs(dx) / w) * 0.2);
+      pb.setC(px, py, nz(c, px, py, 6));
+    }
+  }
+  // Branch
+  const branches = depth > 2 ? 2 : 1;
+  for (let b = 0; b < branches; b++) {
+    const bAngle = angle + (H(depth * 7 + b, sx|0) - 0.5) * 1.2;
+    const bLen = len * (0.55 + H(depth * 11 + b, sy|0) * 0.25);
+    texCoral(pb, ex, ey, bAngle, bLen, thickness * 0.7, pal, depth - 1);
+  }
+}
+
+// ================================================================
+//  MULTI-PASS POST-PROCESSING
+// ================================================================
+
+// Pass 1: Ambient Occlusion — darken pixels near internal region boundaries
+function passAO(pb, strength) {
+  const snap = new Uint8ClampedArray(pb.data);
+  strength = strength || 0.15;
+  for (let y = 1; y < pb.h - 1; y++) for (let x = 1; x < pb.w - 1; x++) {
+    if (!pb.has(x, y)) continue;
+    const i = (y * pb.w + x) << 2;
+    // Count how many neighbors have DIFFERENT colors (indicates region boundary)
+    let diff = 0;
+    const r = snap[i], g = snap[i+1], b = snap[i+2];
+    for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const ni = ((y+dy) * pb.w + (x+dx)) << 2;
+      if (snap[ni+3] === 0) continue; // transparent neighbor
+      const dr = Math.abs(snap[ni] - r) + Math.abs(snap[ni+1] - g) + Math.abs(snap[ni+2] - b);
+      if (dr > 40) diff++;
+    }
+    if (diff >= 2) {
+      const ao = strength * (diff / 4);
+      pb.data[i]   = (pb.data[i]   * (1 - ao)) | 0;
+      pb.data[i+1] = (pb.data[i+1] * (1 - ao)) | 0;
+      pb.data[i+2] = (pb.data[i+2] * (1 - ao)) | 0;
+    }
+  }
+}
+
+// Pass 2: Directional light (top-left)
+function passLight(pb, strength) {
+  strength = strength || 0.12;
+  const snap = new Uint8ClampedArray(pb.data);
+  for (let y = 0; y < pb.h; y++) for (let x = 0; x < pb.w; x++) {
+    if (!pb.has(x, y)) continue;
+    const i = (y * pb.w + x) << 2;
+    const c = [snap[i], snap[i+1], snap[i+2]];
+    const l = (0.5 - x/pb.w) * strength + (0.5 - y/pb.h) * strength * 0.6;
+    const adj = l > 0 ? lt(c, l) : dk(c, -l);
+    pb.data[i] = adj[0]; pb.data[i+1] = adj[1]; pb.data[i+2] = adj[2];
+  }
+}
+
+// Pass 3: Specular highlights on marked regions
+function passSpecular(pb, specMap) {
+  // specMap: array of {cx, cy, r, intensity} — where to add specular spots
+  if (!specMap) return;
+  for (const spec of specMap) {
+    for (let y = spec.cy - spec.r; y <= spec.cy + spec.r; y++)
+      for (let x = spec.cx - spec.r; x <= spec.cx + spec.r; x++) {
+        const c = pb.get(x, y); if (!c) continue;
+        const d = Math.sqrt((x-spec.cx)**2 + (y-spec.cy)**2);
+        if (d > spec.r) continue;
+        const intensity = (1 - d / spec.r) * spec.intensity;
+        pb.setC(x, y, lt(c, intensity));
+      }
+  }
+}
+
+// Edge outline
+function passOutline(pb, amount) {
+  amount = amount || 0.3;
+  const snap = new Uint8ClampedArray(pb.data);
+  for (let y = 0; y < pb.h; y++) for (let x = 0; x < pb.w; x++) {
+    if (!pb.has(x, y)) continue;
+    let edge = false;
+    for (const [ex,ey] of [[-1,0],[1,0],[0,-1],[0,1]]) if (!pb.has(x+ex, y+ey)) { edge = true; break; }
+    if (edge) {
+      const i = (y * pb.w + x) << 2;
+      pb.data[i]   = (snap[i]   * (1-amount)) | 0;
+      pb.data[i+1] = (snap[i+1] * (1-amount)) | 0;
+      pb.data[i+2] = (snap[i+2] * (1-amount)) | 0;
+    }
+  }
+}
+
+// Full pipeline
+function pp(pb, opts) {
+  opts = opts || {};
+  passAO(pb, opts.ao || 0.12);
+  passLight(pb, opts.light || 0.1);
+  if (opts.specular) passSpecular(pb, opts.specular);
+  passOutline(pb, opts.outline || 0.28);
+  return pb;
+}
+
+// ---- Render ----
+function render(pb, id, scale, bg) {
+  const cv = document.getElementById(id);
+  cv.width = pb.w * scale; cv.height = pb.h * scale;
+  const ctx = cv.getContext('2d');
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cv.width, cv.height); }
+  for (let y = 0; y < pb.h; y++) for (let x = 0; x < pb.w; x++) {
+    const i = (y * pb.w + x) << 2;
+    const a = pb.data[i+3];
+    if (a === 0) continue;
+    ctx.fillStyle = a >= 255
+      ? `rgb(${pb.data[i]},${pb.data[i+1]},${pb.data[i+2]})`
+      : `rgba(${pb.data[i]},${pb.data[i+1]},${pb.data[i+2]},${(a/255).toFixed(2)})`;
+    ctx.fillRect(x * scale, y * scale, scale, scale);
+  }
+}
+
+// ================================================================
+//  PALETTES
+// ================================================================
+const P = {
+  wood:    ['#5a3520','#6b4530','#7b5540','#4a2a18'].map(hx),
+  wdlt:    ['#8b6040','#9b7050','#7b5535','#a08060'].map(hx),
+  // Cloth: 5 tones from deep fold to fold peak
+  cloth_blue: ['#1a2848','#2a3858','#3a5078','#5070a0','#7090c0'].map(hx),
+  cloth_white:['#888890','#a0a0a8','#c0c0c8','#d8d8e0','#f0f0f4'].map(hx),
+  cloth_red:  ['#601818','#802020','#a03030','#c04040','#e06060'].map(hx),
+  cloth_purple:['#2a1040','#3a1858','#502878','#6838a0','#8050c0'].map(hx),
+  // Woven stripes
+  stripe1: ['#c03030','#d04040','#e05050'].map(hx),
+  stripe2: ['#e8e0d0','#f0e8e0','#f8f0e8'].map(hx),
+  // Metal: 6 tones dark→specular
+  iron:    ['#2a2a30','#3a3a42','#4a4a55','#5a5a68','#707080','#9090a0'].map(hx),
+  steel:   ['#404858','#506070','#607888','#7090a0','#90b0c0','#b0d0e0'].map(hx),
+  gold:    ['#604010','#806020','#a08030','#c0a040','#e0c060','#f0e080'].map(hx),
+  // Crystal
+  crystal_cyan:['#103040','#185060','#208080','#30a0a8','#50c8d0','#80e8f0'].map(hx),
+  crystal_glow: hx('#40f0f0'),
+  // Bone
+  bone:    ['#d8d0b8','#c8c0a8','#b8b098','#a8a088','#989080'].map(hx),
+  // Rope
+  rope:    ['#8a7050','#9a8060','#a89070','#b8a080'].map(hx),
+  // Coral/vine
+  vine:    ['#2a5a18','#3a6a20','#4a7a28','#5a8a30'].map(hx),
+  coral:   ['#a04040','#b05050','#c06060','#d07070'].map(hx),
+  // Fruit
+  apple:   hx('#d03030'), lemon: hx('#e0d040'), melon: hx('#40a040'),
+  grape:   hx('#6030a0'), orange: hx('#e08020'),
+  grass:   ['#4a8c30','#3a7020','#5aa040','#2a5a10'].map(hx),
+  bark:    ['#4a3020','#3a2818','#5a4030','#6a5040'].map(hx),
+  sack:    ['#8a7860','#7a6850','#9a8870','#a89878','#6a5840'].map(hx),
+};
+
+// ================================================================
+//  DEMO ASSETS
+// ================================================================
+
+// --- 1. Market Tent (70×60) ---
+function mkTent() {
+  const p = new PB(70, 60);
+  // Poles
+  texWood(p, 4, 10, 8, 56, P.wood, 'v');
+  texWood(p, 62, 10, 66, 56, P.wood, 'v');
+  texWood(p, 33, 5, 37, 56, P.wood, 'v');
+  // Pole caps (metal)
+  for (const px of [6, 34, 64]) {
+    texMetal(p, null, px-2, 6, px+2, 10, P.gold, -0.3, 0.15);
+    p.setC(px-1, 5, hx('#e0c060')); p.setC(px, 4, hx('#f0e080')); p.setC(px+1, 5, hx('#e0c060'));
+  }
+  // Cloth canopy — draped with folds
+  for (let y = 12; y < 30; y++) for (let x = 5; x < 65; x++) {
+    // Drape shape: curves down from poles, lowest in between
+    const t = (x - 5) / 60; // 0-1 across
+    const drapeY = 12 + Math.sin(t * Math.PI) * 8 + Math.sin(t * Math.PI * 2) * 3;
+    if (y < drapeY || y > drapeY + 10) continue;
+    // Alternating stripe pattern
+    const stripe = Math.floor((x - 5) / 8) % 2 === 0;
+    const pal = stripe ? P.cloth_red : P.cloth_white;
+    // Fold shading based on drape curve
+    const foldPhase = t * Math.PI * 2;
+    const fold = Math.sin(foldPhase * 3 + (y - drapeY) * 0.3) * 0.5 + 0.5;
+    const ci = Math.min(pal.length-1, Math.floor(fold * pal.length));
+    let c = [...pal[ci]];
+    // Bottom fringe darker
+    if (y > drapeY + 8) c = dk(c, 0.2);
+    p.setC(x, y, nz(c, x, y, 3));
+  }
+  // Table surface
+  texPlanks(p, 10, 38, 60, 42, P.wdlt, 3);
+  // Table legs
+  texWood(p, 12, 42, 15, 54, P.wood, 'v');
+  texWood(p, 55, 42, 58, 54, P.wood, 'v');
+  // Items on table (simple colored circles)
+  for (let i = 0; i < 5; i++) {
+    const ix = 16 + i * 9, iy = 36;
+    const colors = [P.apple, P.lemon, P.melon, P.orange, P.grape];
+    for (let dy = -2; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) {
+      if (dx*dx + dy*dy > 5) continue;
+      let c = [...colors[i]]; if (dy < 0) c = lt(c, 0.15); if (dy > 0) c = dk(c, 0.15);
+      p.setC(ix+dx, iy+dy, nz(c, ix+dx, iy+dy, 8));
+    }
+  }
+  return pp(p, { ao: 0.15, light: 0.12, outline: 0.28 });
+}
+
+// --- 2. Weapon Rack (50×50) ---
+function mkWeaponRack() {
+  const p = new PB(50, 50);
+  // Rack frame
+  texWood(p, 4, 4, 8, 46, P.wood, 'v');
+  texWood(p, 42, 4, 46, 46, P.wood, 'v');
+  // Cross beams
+  for (const by of [10, 30]) texPlanks(p, 4, by, 46, by+3, P.wood, 2);
+  // Sword 1 (hanging)
+  texMetal(p, null, 14, 8, 18, 36, P.steel, -0.4, 0.1);
+  // Guard
+  texMetal(p, null, 11, 32, 21, 35, P.gold, -0.3, 0.15);
+  // Grip
+  texWood(p, 14, 35, 18, 42, P.bark, 'v');
+  // Pommel
+  texMetal(p, (x,y) => inE(x,y,16,43,2.5,2), 13, 41, 19, 46, P.gold, -0.3, 0.15);
+
+  // Axe (right side)
+  // Handle
+  texWood(p, 32, 12, 36, 42, P.bark, 'v');
+  // Axe head
+  const axePal = P.iron;
+  for (let y = 10; y < 26; y++) for (let x = 28; x < 40; x++) {
+    const dx = x - 34, dy = y - 18;
+    if (x < 32 && !inE(x, y, 32, 18, 5, 8)) continue;
+    if (x >= 32 && x < 36) continue; // handle area
+    if (x >= 36 && !inE(x, y, 36, 18, 5, 8)) continue;
+    const nx = (x-28)/12, ny = (y-10)/16;
+    const ci = Math.min(axePal.length-1, Math.floor((nx*0.3+ny*0.4)*axePal.length));
+    let c = [...axePal[ci]];
+    // Edge highlight
+    if (x <= 29 || x >= 39) c = lt(c, 0.2);
+    p.setC(x, y, nz(c, x, y, 4));
+  }
+  return pp(p, { ao: 0.15, light: 0.12, specular: [{cx:16,cy:18,r:4,intensity:0.15},{cx:30,cy:16,r:3,intensity:0.1}], outline: 0.3 });
+}
+
+// --- 3. Sack + Barrel assembly (48×40) ---
+function mkSackBarrel() {
+  const p = new PB(48, 40);
+  // Barrel
+  const bx = 28, by = 20;
+  for (let y = by-10; y < by+10; y++) for (let x = bx-8; x < bx+8; x++) {
+    // Barrel shape: wider in middle
+    const ny = (y - (by-10)) / 20;
+    const bulge = 1 + Math.sin(ny * Math.PI) * 0.15;
+    if (!inE(x, y, bx, by, 8 * bulge, 10)) continue;
+    const t = (x - (bx-8)) / 16;
+    const g = Math.sin(t * 10 + H(0, Math.floor(y/2)) * 2) * 0.5 + 0.5;
+    let c = [...P.wdlt[Math.min(P.wdlt.length-1, Math.floor(g * P.wdlt.length))]];
+    p.setC(x, y, nz(c, x, y, 6));
+  }
+  // Metal bands on barrel
+  for (const bandY of [by-7, by-1, by+5]) {
+    for (let x = bx-7; x < bx+7; x++) {
+      if (!p.has(x, bandY)) continue;
+      texMetal(p, null, x, bandY, x+1, bandY+2, P.iron, -0.3, 0.15);
+    }
+  }
+
+  // Sack (in front, with contact shadow via blitAlpha)
+  const sack = new PB(20, 22);
+  // Body
+  for (let y = 6; y < 22; y++) for (let x = 2; x < 18; x++) {
+    const nx = (x-2)/16, ny = (y-6)/16;
+    // Bulging sack shape
+    if (!inE(x, y, 10, 14, 8+Math.sin(ny*3)*1, 8)) continue;
+    // Cloth texture with vertical folds
+    const fold = Math.sin(nx * 8 + ny * 2) * 0.5 + 0.5;
+    const ci = Math.min(P.sack.length-1, Math.floor(fold * P.sack.length));
+    let c = [...P.sack[ci]];
+    // Bulge highlight (center bright)
+    const distCenter = Math.abs(nx - 0.5) * 2;
+    if (distCenter < 0.3) c = lt(c, (0.3 - distCenter) * 0.15);
+    sack.setC(x, y, nz(c, x, y, 5));
+  }
+  // Tied top
+  for (let y = 3; y < 8; y++) for (let x = 7; x < 13; x++) {
+    const topW = 3 - Math.abs(y - 5) * 0.8;
+    if (Math.abs(x - 10) > topW) continue;
+    sack.setC(x, y, nz(pk(P.sack, x, y), x, y, 6));
+  }
+  // Rope tie
+  for (let x = 8; x < 12; x++) sack.setC(x, 7, nz(pk(P.rope, x, 7), x, 7, 4));
+  pp(sack, { ao: 0.12, light: 0.1, outline: 0.26 });
+
+  // Blit sack onto scene with contact shadow
+  blitAlpha(sack, p, 2, 16, { contactShadow: true, shadowOffset: [1, 2], shadowAlpha: 0.18 });
+
+  return pp(p, { ao: 0.1, light: 0.1, outline: 0.26 });
+}
+
+// --- 4. Crystal Cluster (40×40) ---
+function mkCrystal() {
+  const p = new PB(40, 40);
+  // Base rock
+  for (let y = 28; y < 38; y++) for (let x = 8; x < 32; x++) {
+    if (!inE(x, y, 20, 34, 12, 5)) continue;
+    let c = pk(['#4a4a48','#3a3a38','#5a5a58'].map(hx), x*3, y*5);
+    p.setC(x, y, nz(c, x, y, 8));
+  }
+  // Crystal shards
+  const shards = [
+    { verts: [[20,4],[16,28],[24,28]], glow: 0.4 },   // center tall
+    { verts: [[12,12],[8,30],[16,30]], glow: 0.3 },    // left
+    { verts: [[28,10],[24,30],[32,30]], glow: 0.35 },  // right
+    { verts: [[17,16],[14,28],[20,28]], glow: 0.25 },  // center-left small
+    { verts: [[25,14],[22,28],[28,28]], glow: 0.25 },  // center-right small
+  ];
+  for (const shard of shards) {
+    const v = shard.verts;
+    const sx1 = Math.min(v[0][0],v[1][0],v[2][0]);
+    const sx2 = Math.max(v[0][0],v[1][0],v[2][0]);
+    const sy1 = Math.min(v[0][1],v[1][1],v[2][1]);
+    const sy2 = Math.max(v[0][1],v[1][1],v[2][1]);
+    texCrystal(p, (x,y) => inTri(x,y,...v[0],...v[1],...v[2]),
+      sx1,sy1,sx2,sy2, P.crystal_cyan, P.crystal_glow, shard.glow);
+  }
+  // Glow aura around crystals
+  for (let y = 0; y < 40; y++) for (let x = 0; x < 40; x++) {
+    if (p.has(x, y)) continue;
+    // Check distance to nearest crystal pixel
+    let minD = 99;
+    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+      if (p.has(x+dx, y+dy)) { const d = Math.sqrt(dx*dx+dy*dy); if (d < minD) minD = d; }
+    }
+    if (minD < 3) {
+      const glow = (1 - minD/3) * 0.4;
+      p.setC(x, y, P.crystal_glow, (glow * 120)|0);
+    }
+  }
+  return pp(p, { ao: 0.08, light: 0.08, specular: [{cx:20,cy:12,r:5,intensity:0.2},{cx:12,cy:20,r:3,intensity:0.15}], outline: 0.25 });
+}
+
+// --- 5. Bone Pile (40×28) ---
+function mkBones() {
+  const p = new PB(40, 28);
+  // Ground
+  for (let y = 22; y < 28; y++) for (let x = 0; x < 40; x++)
+    p.setC(x, y, nz(pk(P.grass, x*2, y*3), x, y, 10));
+
+  // Long bone 1 (diagonal)
+  for (let i = 0; i < 28; i++) {
+    const bx = 4 + i, by = 18 - i * 0.3;
+    const w = 1.5 + Math.sin(i/28*Math.PI) * 0.8; // wider at joints
+    for (let dy = -w; dy <= w; dy++) {
+      const px = Math.round(bx), py = Math.round(by + dy);
+      const t = Math.abs(dy) / w;
+      let c = [...P.bone[Math.min(P.bone.length-1, Math.floor(t * P.bone.length))]];
+      if (t > 0.7) c = dk(c, 0.15);
+      p.setC(px, py, nz(c, px, py, 4));
+    }
+  }
+  // Joint knobs
+  for (const [jx, jy] of [[5, 18], [32, 10]]) {
+    for (let y = jy-2; y <= jy+2; y++) for (let x = jx-2; x <= jx+2; x++) {
+      if (!inE(x, y, jx, jy, 2.5, 2.5)) continue;
+      const d = Math.sqrt((x-jx)**2 + (y-jy)**2) / 2.5;
+      let c = [...P.bone[0]]; c = dk(c, d * 0.2); if (d < 0.3) c = lt(c, 0.1);
+      p.setC(x, y, nz(c, x, y, 4));
+    }
+  }
+  // Short bone crossing
+  for (let i = 0; i < 16; i++) {
+    const bx = 10 + i * 0.7, by = 20 + i * 0.3;
+    for (let dy = -1; dy <= 1; dy++) {
+      p.setC(Math.round(bx), Math.round(by+dy), nz([...P.bone[1]], Math.round(bx), Math.round(by+dy), 4));
+    }
+  }
+  // Skull
+  for (let y = 10; y < 22; y++) for (let x = 14; x < 26; x++) {
+    if (!inE(x, y, 20, 15, 6, 5.5)) continue;
+    // Jaw extension
+    if (y > 18 && !inE(x, y, 20, 18, 4, 3.5)) continue;
+    let c = [...P.bone[0]];
+    const d = Math.sqrt(((x-20)/6)**2 + ((y-15)/5.5)**2);
+    if (d > 0.7) c = dk(c, (d-0.7)*0.3);
+    // Eye sockets
+    if (inE(x, y, 18, 14, 1.8, 1.5) || inE(x, y, 22, 14, 1.8, 1.5)) c = dk(c, 0.5);
+    // Nose
+    if (inE(x, y, 20, 16.5, 1, 1)) c = dk(c, 0.3);
+    // Teeth line
+    if (y === 19 && x >= 17 && x <= 23 && (x % 2 === 0)) c = dk(c, 0.15);
+    p.setC(x, y, nz(c, x, y, 3));
+  }
+  return pp(p, { ao: 0.12, light: 0.1, outline: 0.26 });
+}
+
+// --- 6. Fruit Stall Assembly (72×55) ---
+function mkFruitStall() {
+  const p = new PB(72, 55);
+  // Stall frame (wood posts + top beam)
+  texWood(p, 4, 8, 9, 50, P.wood, 'v');   // left post
+  texWood(p, 63, 8, 68, 50, P.wood, 'v'); // right post
+  texPlanks(p, 4, 6, 68, 10, P.wood, 3);  // top beam
+
+  // Striped awning (cloth with folds)
+  for (let y = 2; y < 14; y++) for (let x = 2; x < 70; x++) {
+    const t = (x - 2) / 68;
+    const drapeY = 2 + Math.sin(t * Math.PI) * 4;
+    if (y < drapeY || y > drapeY + 8) continue;
+    const stripe = Math.floor((x - 2) / 6) % 2 === 0;
+    const pal = stripe ? P.stripe1 : P.stripe2;
+    const foldN = (y - drapeY) / 8;
+    const fold = Math.sin(t * 18 + foldN * 2) * 0.5 + 0.5;
+    const ci = Math.min(pal.length-1, Math.floor(fold * pal.length));
+    let c = [...pal[ci]];
+    if (foldN > 0.8) c = dk(c, 0.2);
+    p.setC(x, y, nz(c, x, y, 3));
+  }
+
+  // Display table
+  texPlanks(p, 8, 30, 64, 34, P.wdlt, 3);
+  // Table front panel
+  texPlanks(p, 8, 34, 64, 48, P.wood, 4);
+
+  // Fruit crates on table (assembled via blitAlpha)
+  const fruits = [
+    { color: hx('#d03030'), x: 12, name: 'apple' },
+    { color: hx('#e0d040'), x: 24, name: 'lemon' },
+    { color: hx('#40a040'), x: 36, name: 'melon' },
+    { color: hx('#e08020'), x: 48, name: 'orange' },
+  ];
+
+  for (const fruit of fruits) {
+    // Small crate
+    const crate = new PB(10, 10);
+    texPlanks(crate, 0, 3, 10, 10, P.wdlt, 2);
+    // Rim
+    for (let x = 0; x < 10; x++) { crate.setC(x, 3, nz(pk(P.wood,x,3),x,3,5)); crate.setC(x, 9, nz(pk(P.wood,x,9),x,9,5)); }
+    for (let y = 3; y < 10; y++) { crate.setC(0, y, nz(pk(P.wood,0,y),0,y,5)); crate.setC(9, y, nz(pk(P.wood,9,y),9,y,5)); }
+    // Fruits in crate
+    for (let i = 0; i < 4; i++) {
+      const fx = 2 + (i % 2) * 3 + Math.floor(H(i,fruit.x)*2);
+      const fy = 1 + Math.floor(i / 2) * 2;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (dx*dx+dy*dy > 1.5) continue;
+        let c = [...fruit.color]; if (dy < 0) c = lt(c, 0.2); if (dy > 0) c = dk(c, 0.15);
+        crate.setC(fx+dx, fy+dy, nz(c, fx+dx, fy+dy, 10));
+      }
+    }
+    pp(crate, { ao: 0.08, light: 0.08, outline: 0.22 });
+    blitAlpha(crate, p, fruit.x, 22, { contactShadow: true, shadowOffset: [0,1], shadowAlpha: 0.12 });
+  }
+
+  return pp(p, { ao: 0.1, light: 0.1, outline: 0.26 });
+}
+
+// ================================================================
+//  RENDER ALL
+// ================================================================
+render(mkTent(), 'tent', 5, '#c0c0b8');
+render(mkWeaponRack(), 'weapons', 5, '#c0c0b8');
+render(mkSackBarrel(), 'sack', 5, '#c0c0b8');
+render(mkCrystal(), 'crystal', 5, '#1a2030');
+render(mkBones(), 'bones', 5, '#c0c0b8');
+render(mkFruitStall(), 'stall', 4, '#c0c0b8');
+
+})();
+</script>
+</body>
+</html>

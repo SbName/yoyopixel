@@ -140,7 +140,7 @@ Game-ready assets using region-based procedural textures — LLM declares region
 </tr>
 </table>
 
-12 procedural texture algorithms: stone, tiles, stucco, wood, planks, bark, foliage, fur, scales, feathers, spiral, smooth
+19 procedural texture algorithms including cloth folds, metal specular, crystal facets, bone, rope, woven patterns, and coral branching
 
 **Full tileset demo:**
 
@@ -253,8 +253,9 @@ Full decision rules → [`pixelart-skill.md`](pixelart-skill.md)
 | Terrain generation | FBM (Fractal Brownian Motion) noise |
 | Mountain ridges | Ridge noise (abs-inverted FBM) |
 | Gradient dithering | Bayer 4×4 ordered dithering |
-| Surface textures | Voronoi stone, offset-grid tiles, wood grain, fur strands, fish scales, feather barbs, spiral shell (12 types) |
-| Post-processing | Auto-shading, edge outline, local shadows, radial glow |
+| Surface textures | 19 types: stone, tiles, wood, bark, foliage, fur, scales, feathers, spiral, cloth, woven, metal, crystal, bone, rope, coral, stucco, planks, smooth |
+| Post-processing | Multi-pass: ambient occlusion → directional light → specular highlights → edge outline |
+| Composition | RGBA pixel buffer, alpha-aware blit with contact shadows, assembly pattern for complex assets |
 | Animation | CSS @keyframes + requestAnimationFrame |
 | Atmosphere | Pure CSS particles (rain, petals, embers, snow) |
 | Output | Self-contained HTML (zero external dependencies) |
@@ -285,7 +286,8 @@ pixelai/
 ├── prototype-cottage.html    ★ Procedural texture engine: stone cottage + tileset
 ├── prototype-gallery.html    ★ Style gallery: tower, sakura tree, chest, well
 ├── prototype-animals.html    ★ Organic textures: fox, koi, owl, snail
-└── tileset-village.html      ★ Full village tileset (~35 assets on one sheet)
+├── tileset-village.html      ★ Full village tileset (~35 assets on one sheet)
+└── engine-v2.html            ★ Engine v2 demo: cloth, metal, crystal, bone, assembly
 ```
 
 ---

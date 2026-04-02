@@ -265,6 +265,13 @@ Engine auto-fills:
 | `texFeathers` | V-shaft + barb layering | Bird plumage, wings |
 | `texSpiral` | Logarithmic spiral + dome shading | Snail shell, decorative spiral |
 | `texSmooth` | Gradient fill with noise | Smooth skin, fins, body |
+| `texCloth` | Sinusoidal fold bands + micro-folds | Tents, sacks, banners, draped cloth |
+| `texWoven` | Warp/weft grid + geometric motifs | Tent stripes, rugs, baskets, textiles |
+| `texMetal` | Specular highlight band + ambient gradient | Iron bands, weapons, shields, armor |
+| `texCrystal` | Faceted sectors + internal glow | Gems, crystals, magic items, glass |
+| `texBone` | Longitudinal cracks + dry gradient | Skeletons, tusks, horns, fossils |
+| `texRope` | Twisted strand pattern + round cross-section | Nets, ropes, bindings |
+| `texCoral` | Recursive branching growth | Coral, dark tendrils, vines, roots |
 
 ### Post-Processing Pipeline
 

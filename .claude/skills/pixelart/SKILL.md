@@ -275,17 +275,79 @@ LLM outputs compact declarations:
 | `texFeathers` | V-shaft + barb layering | Bird plumage, owl, wings |
 | `texSpiral` | Logarithmic spiral + dome shading | Snail shell, ammonite |
 | `texSmooth` | Gradient fill with noise | Smooth skin, fins, body |
+| `texCloth` | Sinusoidal fold bands + micro-folds | Tents, sacks, banners, draped cloth |
+| `texWoven` | Warp/weft grid + geometric motifs | Tent stripes, rugs, baskets, textiles |
+| `texMetal` | Specular highlight band + ambient gradient | Iron bands, weapons, shields, armor |
+| `texCrystal` | Faceted sectors + internal glow | Gems, crystals, magic items, glass |
+| `texBone` | Longitudinal cracks + dry gradient | Skeletons, tusks, horns, fossils |
+| `texRope` | Twisted strand pattern + round cross-section | Nets, ropes, bindings, well ropes |
+| `texCoral` | Recursive branching growth | Coral, dark tendrils, root structures, vines |
 
-### Post-Processing Pipeline
+### Post-Processing Pipeline (Multi-Pass v2)
 
-1. **`autoShade(pb, strength)`** — Directional light from top-left
-2. **`edgeOutline(pb, amount)`** — Darken pixels adjacent to empty space
-3. **`shadowRect(pb, ...)`** — Local shadow with directional falloff
-4. **`addGlow(pb, cx, cy, radius, color, intensity)`** — Radial light emission
+```
+pp(pb, { ao: 0.12, light: 0.1, specular: [{cx,cy,r,intensity}], outline: 0.28 })
+```
+
+1. **`passAO(pb, strength)`** — Ambient occlusion: darken pixels at region boundaries (where neighboring colors differ significantly)
+2. **`passLight(pb, strength)`** — Directional light from top-left
+3. **`passSpecular(pb, specMap)`** — Add specular highlights at specified points (for metal, crystal, glass)
+4. **`passOutline(pb, amount)`** — Darken pixels adjacent to empty space
+
+### Composition System
+
+**RGBA PixelBuffer** — All pixels have alpha channel. Supports semi-transparent effects (glow halos, glass, cloth veils).
+
+**`blitAlpha(src, dst, dx, dy, opts)`** — Alpha-aware blit with contact shadow:
+```javascript
+blitAlpha(sack, scene, 10, 20, {
+  contactShadow: true,      // auto-generate shadow below source
+  shadowOffset: [1, 2],      // shadow displacement
+  shadowAlpha: 0.18,          // shadow opacity
+  alpha: 1.0                  // global source opacity
+});
+```
+
+**Assembly pattern** — Build complex assets from layered sub-parts:
+```
+Assembly = base_structure + blitAlpha(items, contactShadow) + decoration
+Example: fruit_stall = wood_frame + cloth_awning(texCloth) + blitAlpha(fruit_crate) × 4
+```
+
+### Shape Primitives (Expanded)
+
+| Primitive | Usage |
+|-----------|-------|
+| `inE(x,y, cx,cy, rx,ry)` | Ellipse — body parts, rocks, barrels |
+| `inTri(x,y, x1,y1, x2,y2, x3,y3)` | Triangle — roofs, crystal shards |
+| `inPoly(x,y, vertices[])` | Arbitrary polygon — complex silhouettes |
+| `inRR(x,y, x1,y1, x2,y2, r)` | Rounded rectangle — crates, signs, shields |
+| `distY(y, x, freq, amp)` | Sinusoidal Y warp — cloth edges, organic forms |
+
+### Per-Material Shading Guidance
+
+| Material | Tones | Shading pattern |
+|----------|-------|----------------|
+| Stone | 5 | deep mortar → stone shadow → base → light → highlight chip |
+| Wood | 4 | grain dark → grain base → grain light → edge highlight |
+| Cloth | 5 | fold valley → fold shadow → base → fold light → fold peak |
+| Metal | 6 | dark ambient → base → reflected mid → reflected light → specular edge → specular peak |
+| Crystal | 5 | core glow → base facet → facet edge → bright facet → specular point |
+| Bone | 4 | crack shadow → aged base → surface light → dry highlight |
+
+### Asset Size Minimums
+
+| Asset type | Minimum size | Recommended |
+|-----------|-------------|-------------|
+| Hero building | 64px | 80–120px |
+| Furniture / structures | 32px | 40–56px |
+| Containers (crates, barrels) | 20px | 24–32px |
+| Small items (potions, food) | 12px | 16–20px |
+| Detail items (pebbles, coins) | 8px | 8–12px |
 
 ### Rendering
 
-Uses `<canvas>` with `PixelBuffer` class. Each pixel is individually addressable. Rendered at configurable scale (4–6x typical) with `image-rendering: pixelated`.
+Uses `<canvas>` with `PixelBuffer` class (RGBA). Each pixel is individually addressable with alpha channel. Rendered at configurable scale (3–6x typical) with `image-rendering: pixelated`.
 
 ---
 
@@ -350,11 +412,21 @@ When generating a tileset, auto-decide which assets to include based on theme:
 | Theme | Hero asset | Structures | Nature | Terrain | Details |
 |-------|-----------|------------|--------|---------|---------|
 | **Medieval village** | Stone cottage | Fences, crates, well, birdhouse | Bushes, trees, flowers | Cobblestone paths, rocks, cliffs | Grass, stumps, pebbles |
-| **Dungeon** | Castle gate | Torches, doors, chests, barrels | Moss, vines, mushrooms | Stone floor tiles, walls, pits | Bones, chains, potions |
-| **Forest** | Large oak tree | Campfire, tent, log cabin | Bushes, ferns, saplings | Dirt paths, streams, boulders | Mushrooms, berries, acorns |
+| **Market / Bazaar** | Market tent (texCloth awning) | Stalls with goods, weapon rack, potion cart | Potted plants, flowers | Cobblestone, carpet (texWoven) | Fruits, bottles, coins, banners |
+| **Fishing village** | Wooden warehouse | Shelf racks, barrels, nets, drying rack | Seaweed, coral | Dock planks, water tiles | Fish, crates, sacks, rope, anchor |
+| **Dungeon** | Castle gate | Torches, doors, chests, barrels | Moss, vines, mushrooms | Stone floor tiles, walls, pits | Bones (texBone), chains, potions |
+| **Dark fantasy** | Corrupted tower | Spider structures, bone altars, cursed trees | Crystal growths (texCrystal), dark roots (texCoral) | Cracked stone, void tiles | Webs, candles, skull, runes, glow particles |
+| **Tropical / Tribal** | Totem pillar, tiki hut | Yurt/tent (texWoven), palm shelter | Palm trees, coral (texCoral), shells | Sand, beach tiles, shallow water | Tiki masks, seashells, rope (texRope), pearls |
+| **Forest** | Large oak tree | Campfire, tent (texCloth), log cabin | Bushes, ferns, saplings | Dirt paths, streams, boulders | Mushrooms, berries, acorns |
 | **Farm** | Barn | Fences, troughs, windmill | Crops, haystacks, flowers | Dirt/grass tiles, pond | Chickens, tools, baskets |
-| **Desert** | Sand temple | Obelisk, market stall, well | Cacti, palm trees, tumbleweeds | Sand tiles, dunes, oasis | Pots, bones, scorpions |
-| **Winter** | Snow cabin | Ice walls, lampposts, sled | Pine trees, holly, bare trees | Snow tiles, ice patches, paths | Snowmen, icicles, footprints |
+
+**Assembly recipes** for composite assets:
+```
+market_stall = wood_frame + texCloth(awning, stripes) + blitAlpha(fruit_crate×4) + contact_shadows
+weapon_rack = wood_frame + blitAlpha(sword, texMetal) + blitAlpha(axe) + blitAlpha(shield)
+shelf_unit = wood_shelves + blitAlpha(sack, texCloth) + blitAlpha(barrel) + blitAlpha(crate)
+fishing_net = rope_frame(texRope) + blitAlpha(hanging_fish×4)
+```
 
 Aim for **25–40 assets** per tileset, covering all categories.
 
