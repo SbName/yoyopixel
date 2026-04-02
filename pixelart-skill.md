@@ -4,13 +4,26 @@ Generate pixel art as self-contained HTML. No images, no dependencies.
 
 ## Interface
 
-**Input:** size + prompt. That's it.
+### Mode 1: Single asset (default)
+
+**Input:** size + prompt.
 
 ```
-pixel art, 16x16, a fire mage
-pixel art, 32x32, cyberpunk cat with neon goggles
-pixel art, 8x8, treasure chest
-pixel art, 128x96, mountain sunset landscape
+/pixelart 16x16, a fire mage
+/pixelart 32x32, cyberpunk cat with neon goggles
+/pixelart 80x85, stone cottage with red tile roof
+/pixelart 50x40, a fox sitting in grass
+```
+
+### Mode 2: Tileset / Sprite sheet
+
+**Input:** `tileset` + theme. Generates 25–40 related assets on a single sheet.
+
+```
+/pixelart tileset, medieval village
+/pixelart tileset, dungeon crawler
+/pixelart tileset, forest nature pack
+/pixelart tileset, farm animals
 ```
 
 **Output:** A single, self-contained `.html` file.
@@ -271,7 +284,7 @@ Shapes are defined as composites of primitive tests:
 - **Rect** — Simple bounds check (walls, doors, windows)
 - **Composite** — Multiple primitives combined for complex organic shapes
 
-### Examples
+### Single Asset Examples
 
 | Prompt | Engine produces |
 |--------|----------------|
@@ -279,6 +292,45 @@ Shapes are defined as composites of primitive tests:
 | `48x90, wizard tower at night` | Dark stone + purple conical roof + glowing windows with addGlow + flag |
 | `50x40, fox sitting in grass` | Fur texture with per-zone direction angles + ellipse composite body |
 | `44x26, koi fish in pond` | Scale overlay + gradient fins + water ripple background |
+
+---
+
+## Tileset Mode
+
+When prompt contains **"tileset"**, **"sprite sheet"**, or **"asset pack"**, generate a complete sheet.
+
+### How it works
+
+1. **Shared engine** — All texture generators + post-processing in one file
+2. **Shared palette** — One `P` object with all color sets, used by every asset
+3. **Asset factories** — Each asset type is a function returning a standalone `PB`:
+   ```javascript
+   function mkBush(w, h, rx, ry) {
+     const p = new PB(w, h);
+     texFoliage(p, w/2, h/2, rx, ry, P.fol, P.folDk, .82);
+     return pp(p);  // auto-shade + outline per asset
+   }
+   ```
+4. **Composition** — `blit()` all asset PBs onto a master canvas at specific positions
+5. **Render** — Master canvas at 3x scale, neutral gray `#c0c0b8` background
+
+### Theme → Asset List
+
+| Theme | Hero | Structures | Nature | Terrain | Details |
+|-------|------|------------|--------|---------|---------|
+| Medieval village | Cottage | Fences, crates, well, birdhouse | Bushes, trees, flowers | Cobblestone, rocks, cliffs | Grass, stumps, pebbles |
+| Dungeon | Castle gate | Torches, doors, chests, barrels | Moss, vines, mushrooms | Stone floors, walls, pits | Bones, chains, potions |
+| Forest | Oak tree | Campfire, tent, log cabin | Bushes, ferns, saplings | Dirt paths, streams, boulders | Mushrooms, berries |
+| Farm | Barn | Fences, troughs, windmill | Crops, haystacks | Dirt/grass tiles, pond | Chickens, tools, baskets |
+
+Aim for **25–40 assets** per tileset.
+
+### Tileset Examples
+
+| Prompt | Assets generated |
+|--------|-----------------|
+| `tileset, medieval village` | Cottage, fences×3, crates×2, bushes×6, cobblestone tiles×6, birdhouses×2, flowers×6, stumps×3, rocks×5, grass×6 |
+| `tileset, dungeon crawler` | Gate, torch×2, chest, barrel, door×2, moss tiles, floor tiles×4, wall pieces×4, potions×3, bones, chains |
 
 ---
 

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YoYoPixel · Village Tileset</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:#1a1a2e;font-family:'Courier New',monospace;color:#888;padding:30px}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;border-radius:4px}
+  h1{font-size:15px;letter-spacing:3px;color:#aaa}
+  .info{font-size:11px;color:#555;text-align:center;line-height:1.7}
+  .tag{display:inline-block;background:#2a2a4e;color:#7a7aaa;padding:1px 6px;border-radius:3px;font-size:9px;margin:1px}
+</style>
+</head>
+<body>
+<h1>VILLAGE TILESET &middot; PROCEDURAL ENGINE</h1>
+<canvas id="sheet"></canvas>
+<div class="info">
+  ~35 assets · shared palette · region-based procedural textures<br>
+  <span class="tag">Voronoi Stone</span><span class="tag">Offset Tiles</span><span class="tag">Wood Grain</span>
+  <span class="tag">Fractal Foliage</span><span class="tag">Bark Cracks</span><span class="tag">Auto-Shading</span>
+</div>
+<script>
+(() => {
+'use strict';
+
+// ================================================================
+//  ENGINE (compact)
+// ================================================================
+class PB {
+  constructor(w,h){this.w=w;this.h=h;this.rgb=new Uint8ClampedArray(w*h*3);this.mask=new Uint8Array(w*h)}
+  set(x,y,r,g,b){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return;const i=(y*this.w+x)*3;this.rgb[i]=r;this.rgb[i+1]=g;this.rgb[i+2]=b;this.mask[y*this.w+x]=1}
+  setC(x,y,c){this.set(x,y,c[0],c[1],c[2])}
+  get(x,y){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return null;if(!this.mask[y*this.w+x])return null;const i=(y*this.w+x)*3;return[this.rgb[i],this.rgb[i+1],this.rgb[i+2]]}
+  has(x,y){x|=0;y|=0;return x>=0&&x<this.w&&y>=0&&y<this.h&&this.mask[y*this.w+x]===1}
+}
+function H(x,y){let n=((x|0)*374761393+(y|0)*668265263+1013904223)|0;n=(((n>>13)^n)*1274126177)|0;return(((n>>16)^n)>>>0)/4294967296}
+function hx(s){return[parseInt(s.slice(1,3),16),parseInt(s.slice(3,5),16),parseInt(s.slice(5,7),16)]}
+function dk(c,a){return c.map(v=>Math.max(0,(v*(1-a))|0))}
+function lt(c,a){return c.map(v=>Math.min(255,(v+(255-v)*a)|0))}
+function nz(c,x,y,r){const n=(H(x*7,y*13)-.5)*r;return c.map(v=>Math.max(0,Math.min(255,(v+n)|0)))}
+function pk(a,x,y){return[...a[Math.floor(H(x,y)*a.length)%a.length]]}
+function inE(x,y,cx,cy,rx,ry){const dx=(x-cx)/rx,dy=(y-cy)/ry;return dx*dx+dy*dy<=1}
+function inTri(px,py,x1,y1,x2,y2,x3,y3){const d1=(px-x2)*(y1-y2)-(x1-x2)*(py-y2),d2=(px-x3)*(y2-y3)-(x2-x3)*(py-y3),d3=(px-x1)*(y3-y1)-(x3-x1)*(py-y1);return!((d1<0||d2<0||d3<0)&&(d1>0||d2>0||d3>0))}
+function blit(src,dst,dx,dy){for(let y=0;y<src.h;y++)for(let x=0;x<src.w;x++)if(src.has(x,y)){const i=(y*src.w+x)*3;dst.set(dx+x,dy+y,src.rgb[i],src.rgb[i+1],src.rgb[i+2])}}
+
+// ---- Textures ----
+function texStone(pb,x1,y1,x2,y2,pal,csz,mw,mc){
+  mc=mc||[50,52,58];const centers=[];const cols=Math.ceil((x2-x1)/csz)+2,rows=Math.ceil((y2-y1)/csz)+2;
+  for(let gy=-1;gy<=rows;gy++)for(let gx=-1;gx<=cols;gx++)centers.push({x:x1+(gx+.5)*csz+(H(gx+111,gy+222)-.5)*csz*.65,y:y1+(gy+.5)*csz+(H(gx+333,gy+444)-.5)*csz*.5,c:Math.floor(H(gx+555,gy+666)*pal.length)%pal.length});
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){let d1=1e9,d2=1e9,ni=0;
+    for(let i=0;i<centers.length;i++){const d=Math.abs(x-centers[i].x)*1.05+Math.abs(y-centers[i].y)*.9;if(d<d1){d2=d1;d1=d;ni=i}else if(d<d2)d2=d}
+    const e=d2-d1;if(e<mw)pb.setC(x,y,nz([...mc],x,y,8));else{let c=nz([...pal[centers[ni].c]],x,y,10);if(e<mw+1.5)c=dk(c,.12*(1-(e-mw)/1.5));pb.setC(x,y,c)}}
+}
+function texTiles(pb,test,x1,y1,x2,y2,pal,tw,th){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){if(!test(x,y))continue;const row=Math.floor((y-y1)/th),off=(row&1)*(tw>>1);
+    const tx=(((x-x1+off)%tw)+tw)%tw,ty=(y-y1)%th,col=Math.floor((x-x1+off)/tw);
+    let c=[...pal[Math.floor(H(row*97+col,row*31+77)*pal.length)%pal.length]];
+    if(ty>=th-1)c=dk(c,.32);else if(ty===0)c=lt(c,.06);if(tx===0||tx===tw-1)c=dk(c,.08);pb.setC(x,y,nz(c,x,y,5))}
+}
+function texWood(pb,x1,y1,x2,y2,pal,dir){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const t=dir==='v'?(x-x1)/Math.max(1,x2-x1):(y-y1)/Math.max(1,y2-y1);
+    const g=Math.sin(t*12+H(0,Math.floor((dir==='v'?y:x)/2))*2)*.5+.5;pb.setC(x,y,nz([...pal[Math.min(pal.length-1,Math.floor(g*pal.length))]],x,y,8))}
+}
+function texPlanks(pb,x1,y1,x2,y2,pal,ph){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const row=Math.floor((y-y1)/ph),py2=(y-y1)%ph,t=(x-x1)/(x2-x1);
+    const g=Math.sin(t*10+H(row*77,0)*4+H(row,Math.floor(x/3))*.5)*.5+.5;let c=[...pal[Math.min(pal.length-1,Math.floor(g*pal.length))]];
+    if(py2===0)c=dk(c,.25);const sh=(H(row*99,1)-.5)*12;c=c.map(v=>Math.max(0,Math.min(255,(v+sh)|0)));pb.setC(x,y,nz(c,x,y,6))}
+}
+function texFoliage(pb,cx,cy,rx,ry,palL,palD,dens){
+  dens=dens||.8;for(let y=cy-ry-1;y<=cy+ry+1;y++)for(let x=cx-rx-1;x<=cx+rx+1;x++){
+    const dx2=(x-cx)/rx,dy2=(y-cy)/ry,d=dx2*dx2+dy2*dy2,en=H(x*5,y*7)*.3;if(d>1+en)continue;if(d>.8+en&&H(x*11,y*13)>dens)continue;
+    const up=dy2<-.15&&H(x*17,y*19)>.35;let c=up?pk(palL,x*3,y*5):pk(palD,x*3,y*5);c=dk(c,((dy2+1)/2)*.2);
+    const lf=(-dx2*.4-dy2*.4);if(lf>0)c=lt(c,lf*.12);else c=dk(c,-lf*.08);if(H(x*23,y*29)>.9)c=lt(c,.2);pb.setC(x,y,nz(c,x,y,6))}
+}
+function texBark(pb,x1,y1,x2,y2,pal){
+  for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const t=(x-x1)/(x2-x1);
+    const r1=Math.sin(t*18+H(0,Math.floor(y/3))*3)*.5+.5,r2=Math.sin(t*7+y*.15+H(1,Math.floor(y/5))*2)*.3;
+    let c=[...pal[Math.min(pal.length-1,Math.floor(Math.max(0,Math.min(1,r1+r2))*pal.length))]];
+    if(H(x*31,Math.floor(y/4)*17)<.08)c=dk(c,.4);pb.setC(x,y,nz(c,x,y,7))}
+}
+function texStucco(pb,test,x1,y1,x2,y2,pal){for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++)if(test(x,y))pb.setC(x,y,nz(pk(pal,x*3,y*5),x,y,8))}
+
+// ---- Post-processing ----
+function pp(pb,sh,ol){
+  sh=sh||.1;ol=ol||.28;
+  let sn=new Uint8ClampedArray(pb.rgb);
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){if(!pb.has(x,y))continue;const i=(y*pb.w+x)*3;
+    const c=[sn[i],sn[i+1],sn[i+2]],l=(.5-x/pb.w)*sh+(.5-y/pb.h)*sh*.6;pb.set(x,y,...(l>0?lt(c,l):dk(c,-l)))}
+  sn=new Uint8ClampedArray(pb.rgb);
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){if(!pb.has(x,y))continue;let e=false;
+    for(const[ex,ey]of[[-1,0],[1,0],[0,-1],[0,1]])if(!pb.has(x+ex,y+ey)){e=true;break}
+    if(e){const i=(y*pb.w+x)*3;pb.rgb[i]=(sn[i]*(1-ol))|0;pb.rgb[i+1]=(sn[i+1]*(1-ol))|0;pb.rgb[i+2]=(sn[i+2]*(1-ol))|0}}
+  return pb;
+}
+
+// ================================================================
+//  SHARED PALETTES
+// ================================================================
+const P = {
+  stone:   ['#5a6670','#4e5c66','#6a7680','#556070','#607080'].map(hx),
+  mortar:  hx('#3a3c44'),
+  roof:    ['#b83030','#a82828','#c83838','#9a2828','#ce3e3e'].map(hx),
+  wood:    ['#5a3520','#6b4530','#7b5540','#4a2a18'].map(hx),
+  wdlt:    ['#8b6040','#9b7050','#7b5535','#a08060'].map(hx),
+  stucco:  ['#e8d8c0','#ddd0b8','#f0e0c8','#d8c8b0'].map(hx),
+  glass:   ['#4060c0','#5070d0','#3050b0','#6080e0'].map(hx),
+  chim:    ['#3a4050','#4a5060','#2a3040','#455565'].map(hx),
+  grass:   ['#4a8c30','#3a7020','#5aa040','#2a5a10','#60a848'].map(hx),
+  fol:     ['#3a8020','#4a9030','#2a6a10','#5aa040','#60b048'].map(hx),
+  folDk:   ['#2a5a10','#1a4a08','#3a6a18'].map(hx),
+  dirt:    ['#8a7660','#7a6650','#9a8670'].map(hx),
+  cobble:  ['#d0c0a8','#c0b098','#d8c8b0','#b8a890'].map(hx),
+  cobMort: hx('#9a8a70'),
+  bark:    ['#4a3020','#3a2818','#5a4030','#6a5040'].map(hx),
+  rock:    ['#7a7a78','#6a6a68','#8a8a88','#5a5a58','#9a9a98'].map(hx),
+  rockDk:  ['#5a5a58','#4a4a48','#6a6a68'].map(hx),
+  path:    ['#c8b8a0','#b8a890','#d0c0a8','#a89880'].map(hx),
+  fence:   ['#5a4030','#6a5040','#4a3020','#7a6050'].map(hx),
+  fenceDk: ['#3a2818','#4a3828','#2a1810'].map(hx),
+};
+
+// ================================================================
+//  ASSET FACTORIES
+// ================================================================
+
+// --- Cottage (80×100) ---
+function mkCottage(){
+  const p=new PB(80,100);
+  // ground
+  for(let y=84;y<100;y++)for(let x=0;x<80;x++)p.setC(x,y,nz(pk(P.grass,x*2,y*3),x,y,10));
+  for(let x=0;x<80;x++)if(H(x,1111)<.4){const h=1+Math.floor(H(x,2222)*2);for(let d=0;d<h;d++)if(83-d>=0)p.setC(x,83-d,nz(pk(P.grass,x,d+77),x,83-d,8))}
+  // path
+  texStone(p,34,84,46,100,P.path,4,.8,P.cobMort);
+  // stone wall
+  texStone(p,12,55,68,84,P.stone,6,1.1);
+  // roof
+  texTiles(p,(x,y)=>inTri(x,y,40,20,4,56,76,56),4,20,76,56,P.roof,5,3);
+  // stucco gable
+  texStucco(p,(x,y)=>inTri(x,y,40,26,16,54,64,54),16,26,64,54,P.stucco);
+  // chimney
+  for(let y=12;y<56;y++)for(let x=56;x<63;x++){
+    const ry=x<=40?20+(56-20)*(40-x)/(40-4):20+(56-20)*(x-40)/(76-40);
+    if(y>=ry+1)continue;const bH=3,bW=4,row=Math.floor((y-12)/bH),off=(row&1)*2,bx=((x-56+off)%bW+bW)%bW;
+    if(bx===0||(y-12)%bH===0)p.setC(x,y,nz(hx('#2a2c38'),x,y,6));else p.setC(x,y,nz(pk(P.chim,x*3,y*5),x,y,8))}
+  for(let y=10;y<13;y++)for(let x=54;x<65;x++)p.setC(x,y,nz(dk(pk(P.chim,x,y),.12),x,y,6));
+  // smoke
+  [[58,9],[57,7],[59,5],[58,3]].forEach(([sx,sy])=>p.set(sx,sy,155,155,165));
+  // moon
+  for(let y=2;y<9;y++)for(let x=48;x<55;x++){if(inE(x,y,51,5,3.5,3.5)&&!inE(x,y,53,4,2.8,2.8)){p.set(x,y,180,180,170)}}
+  // trim
+  for(let x=36;x<=44;x++){p.setC(x,20,dk(pk(P.roof,x,20),.3));if(x>=37&&x<=43)p.setC(x,21,dk(pk(P.roof,x,21),.15))}
+  for(let x=4;x<76;x++)p.setC(x,55,nz(hx('#5a3520'),x,55,5));
+  for(let x=12;x<68;x++)p.setC(x,54,nz(hx('#6b4530'),x,54,4));
+  // gable beam
+  for(let x=16;x<64;x++)if(inTri(x,54,40,26,16,54,64,54))p.setC(x,54,nz(hx('#6b4530'),x,54,4));
+  // door
+  const dL=34,dR=46,dCx=40,dRad=6;
+  for(let y=Math.ceil(64-dRad);y<84;y++)for(let x=dL;x<dR;x++){
+    let ok=y>=64;if(!ok){const dx2=x-dCx+.5,dy2=y-64;ok=dx2*dx2+dy2*dy2<=dRad*dRad}if(!ok)continue;
+    let fr=x===dL||x===dR-1||y===83;if(y<64){const d=Math.sqrt((x-dCx+.5)**2+(y-64)**2);if(Math.abs(d-dRad)<1.3)fr=true}
+    if(fr)p.setC(x,y,nz(hx('#3a1a08'),x,y,5));
+    else{const t=(x-dL)/(dR-dL),g=Math.sin(t*14+H(0,Math.floor(y/2))*2)*.5+.5;
+      let c=nz([...P.wood[Math.min(P.wood.length-1,Math.floor(g*P.wood.length))]],x,y,7);if(x===40)c=dk(c,.25);p.setC(x,y,c)}}
+  p.setC(43,73,hx('#c8a840'));p.setC(43,74,hx('#a88830'));
+  // windows
+  function win(x1,y1,x2,y2){
+    for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const edge=x===x1||x===x2-1||y===y1||y===y2-1,mx=(x1+x2)>>1,my=(y1+y2)>>1,cross=x===mx||y===my;
+      if(edge)p.setC(x,y,nz(hx('#4a2a18'),x,y,4));else if(cross)p.setC(x,y,nz(hx('#6b4530'),x,y,4));
+      else{const tx=(x-x1)/(x2-x1),ty=(y-y1)/(y2-y1);let c=pk(P.glass,x*3,y*7);if(tx<.4&&ty<.4)c=lt(c,.25);p.setC(x,y,c)}}
+    for(let x=x1-1;x<=x2;x++)p.setC(x,y2,nz(hx('#6b4530'),x,y2,4))}
+  win(18,61,28,72);win(52,61,62,72);win(37,34,43,42);
+  // shadows
+  for(let x=12;x<68;x++)for(let dy=0;dy<3;dy++){const c=p.get(x,56+dy);if(c)p.setC(x,56+dy,dk(c,.15*(1-dy/3)))}
+  return pp(p,.12,.3);
+}
+
+// --- Bush (configurable) ---
+function mkBush(w,h,rx,ry){
+  const p=new PB(w,h);texFoliage(p,w/2,h/2,rx,ry,P.fol,P.folDk,.82);return pp(p,.08,.26);
+}
+
+// --- Hedge tile (square, for tiling) ---
+function mkHedge(w,h,mask){
+  const p=new PB(w,h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    if(mask&&!mask(x,y,w,h))continue;
+    let c=pk(H(x*17,y*19)>.4?P.fol:P.folDk,x*3,y*5);
+    const edge=x<2||x>=w-2||y<2||y>=h-2;if(edge)c=dk(c,.15);
+    if(H(x*23,y*29)>.88)c=lt(c,.18);p.setC(x,y,nz(c,x,y,6));}
+  return pp(p,.06,.22);
+}
+
+// --- Crate ---
+function mkCrate(w,h,filled){
+  const p=new PB(w,h);
+  if(filled)texPlanks(p,1,1,w-1,h-1,P.wdlt,3);
+  // frame
+  for(let x=0;x<w;x++){p.setC(x,0,nz(pk(P.wood,x,0),x,0,5));p.setC(x,h-1,nz(pk(P.wood,x,h-1),x,h-1,5))}
+  for(let y=0;y<h;y++){p.setC(0,y,nz(pk(P.wood,0,y),0,y,5));p.setC(w-1,y,nz(pk(P.wood,w-1,y),w-1,y,5))}
+  // cross brace
+  if(!filled){const mx=w>>1,my=h>>1;p.setC(mx,0,nz(pk(P.wood,mx,0),mx,0,5));p.setC(mx,h-1,nz(pk(P.wood,mx,h-1),mx,h-1,5));
+    for(let y=0;y<h;y++)p.setC(mx,y,nz(pk(P.wood,mx,y),mx,y,5));for(let x=0;x<w;x++)p.setC(x,my,nz(pk(P.wood,x,my),x,my,5))}
+  return pp(p,.08,.25);
+}
+
+// --- Fence ---
+function mkFence(type){
+  // type: 'panel','gate','post'
+  if(type==='post'){const p=new PB(6,24);texWood(p,1,0,5,20,P.fence,'v');
+    for(let y=0;y<3;y++)for(let x=0;x<6;x++)p.setC(x,y,nz(pk(P.fenceDk,x,y),x,y,5));return pp(p,.08,.26)}
+  const p=new PB(22,34);
+  // posts
+  [2,10,18].forEach(px=>{if(type==='gate'&&px===10)return;texWood(p,px,4,px+4,30,P.fence,'v');
+    // post cap (round top)
+    for(let y=2;y<5;y++)for(let x=px;x<px+4;x++)p.setC(x,y,nz(dk(pk(P.fence,x,y),.1),x,y,5));
+    p.setC(px+1,1,nz(pk(P.fenceDk,px+1,1),px+1,1,5));p.setC(px+2,1,nz(pk(P.fenceDk,px+2,1),px+2,1,5))});
+  // beams
+  const bx1=type==='gate'?2:2,bx2=type==='gate'?22:22;
+  for(let x=bx1;x<bx2;x++){for(const by of[10,11,20,21])p.setC(x,by,nz(pk(P.fence,x,by),x,by,6))}
+  // iron bands
+  [2,10,18].forEach(px=>{if(type==='gate'&&px===10)return;
+    p.setC(px+1,10,nz(hx('#4a4a55'),px+1,10,4));p.setC(px+2,10,nz(hx('#4a4a55'),px+2,10,4));
+    p.setC(px+1,20,nz(hx('#4a4a55'),px+1,20,4));p.setC(px+2,20,nz(hx('#4a4a55'),px+2,20,4))});
+  return pp(p,.08,.26);
+}
+
+// --- Cobblestone tile ---
+function mkCobble(w,h,mask){
+  const p=new PB(w,h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(!mask||mask(x,y,w,h))
+    texStone(p,x,y,x+1,y+1,P.cobble,5,.9,P.cobMort);
+  // Redo as one call for proper voronoi
+  if(mask){const p2=new PB(w,h);texStone(p2,0,0,w,h,P.cobble,5,.9,P.cobMort);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(mask(x,y,w,h)){const c=p2.get(x,y);if(c)p.setC(x,y,c)}}
+  else texStone(p,0,0,w,h,P.cobble,5,.9,P.cobMort);
+  return pp(p,.06,.2);
+}
+
+// --- Tree stump (side view) ---
+function mkStump(variant){
+  const p=new PB(24,24);
+  // ground
+  for(let y=20;y<24;y++)for(let x=0;x<24;x++)p.setC(x,y,nz(pk(P.grass,x*2,y*3),x,y,10));
+  // grass blades
+  for(let x=2;x<22;x++)if(H(x,3333)<.5)p.setC(x,19,nz(pk(P.grass,x,19+100),x,19,8));
+  // stump body
+  const sw=variant===0?8:6,sx=12-sw/2;
+  texBark(p,sx,10,sx+sw,21,P.bark);
+  // top surface (rings)
+  for(let y=8;y<12;y++)for(let x=sx-1;x<sx+sw+1;x++){
+    const dx2=(x-(sx+sw/2))/(sw/2+1),dy2=(y-9.5)/2,d=Math.sqrt(dx2*dx2+dy2*dy2);if(d>1.1)continue;
+    const ring=Math.sin(d*7)*.5+.5;const ci=Math.min(P.wdlt.length-1,Math.floor(ring*P.wdlt.length));
+    let c=[...P.wdlt[ci]];if(d>.85)c=dk(c,.3);p.setC(x,y,nz(c,x,y,6))}
+  // broken branch
+  if(variant===1){for(let i=0;i<4;i++)p.setC(sx+sw+i,14-i,nz(pk(P.bark,i,14),i,14,6))}
+  return pp(p,.08,.26);
+}
+
+// --- Stump top-down ---
+function mkStumpTop(){
+  const p=new PB(22,22);const cx=11,cy=11,r=9;
+  for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
+    const dx2=(x-cx)/r,dy2=(y-cy)/r,d=Math.sqrt(dx2*dx2+dy2*dy2);if(d>1.05)continue;
+    if(d>.85){p.setC(x,y,nz(pk(P.bark,x*3,y*5),x,y,7));continue}
+    const ring=Math.sin(d*8)*.5+.5;const ci=Math.min(P.wdlt.length-1,Math.floor(ring*P.wdlt.length));
+    let c=[...P.wdlt[ci]];if(d>.75)c=dk(c,.2);p.setC(x,y,nz(c,x,y,5))}
+  return pp(p,.08,.24);
+}
+
+// --- Rock ---
+function mkRock(w,h,rx,ry){
+  const p=new PB(w,h);const cx=w/2,cy=h*.55;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const dx2=(x-cx)/rx,dy2=(y-cy)/ry,d=dx2*dx2+dy2*dy2,en=H(x*5,y*7)*.2;if(d>1+en)continue;
+    if(d>.85+en&&H(x*11,y*13)>.7)continue;
+    let c=pk(P.rock,x*3,y*5);c=dk(c,((dy2+1)/2)*.22);
+    if(dx2<-.2&&dy2<-.2)c=lt(c,.12);if(H(x*23,y*29)>.92)c=lt(c,.18);p.setC(x,y,nz(c,x,y,6))}
+  return pp(p,.08,.26);
+}
+
+// --- Rock pile ---
+function mkRockPile(count,w,h){
+  const p=new PB(w,h);
+  for(let i=0;i<count;i++){
+    const rcx=w*.2+H(i*7,100)*w*.6,rcy=h*.4+H(i*11,200)*h*.3;
+    const rrx=2+H(i*13,300)*3,rry=2+H(i*17,400)*2;
+    for(let y=Math.floor(rcy-rry);y<=Math.ceil(rcy+rry);y++)for(let x=Math.floor(rcx-rrx);x<=Math.ceil(rcx+rrx);x++){
+      if(x<0||x>=w||y<0||y>=h)continue;const dx2=(x-rcx)/rrx,dy2=(y-rcy)/rry;if(dx2*dx2+dy2*dy2>1)continue;
+      let c=pk(H(i,500)>.5?P.rock:P.rockDk,x*3+i,y*5);if(dy2>0)c=dk(c,.15);if(dy2<-.3)c=lt(c,.1);p.setC(x,y,nz(c,x,y,6))}}
+  return pp(p,.06,.24);
+}
+
+// --- Cliff edge ---
+function mkCliff(w,h){
+  const p=new PB(w,h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const t=y/h;if(t<.3+H(x*5,y*7)*.15){let c=pk(P.rock,x*3,y*5);if(t<.1)c=lt(c,.1);p.setC(x,y,nz(c,x,y,7))}
+    else if(t<.5+H(x*3,y*11)*.1){p.setC(x,y,nz(pk(P.rockDk,x*3,y*5),x,y,8))}}
+  return pp(p,.06,.22);
+}
+
+// --- Birdhouse ---
+function mkBirdhouse(variant){
+  const p=new PB(18,28);
+  // ground
+  for(let y=24;y<28;y++)for(let x=0;x<18;x++)p.setC(x,y,nz(pk(P.grass,x*2,y*3),x,y,10));
+  if(variant===1) texFoliage(p,9,20,7,5,P.fol,P.folDk,.7); // grass mound
+  // pole
+  texWood(p,8,10,11,25,P.fence,'v');
+  // house body
+  texPlanks(p,4,6,15,16,P.wdlt,3);
+  // roof
+  texTiles(p,(x,y)=>inTri(x,y,9,1,2,8,16,8),2,1,16,8,
+    ['#4a5060','#3a4050','#5a6070'].map(hx),4,2);
+  // entrance
+  p.set(9,10,30,28,25);p.set(10,10,30,28,25);p.set(9,11,30,28,25);p.set(10,11,30,28,25);
+  // perch
+  p.setC(9,13,hx('#5a4030'));p.setC(10,13,hx('#5a4030'));p.setC(11,13,hx('#5a4030'));
+  return pp(p,.08,.26);
+}
+
+// --- Flower ---
+function mkFlower(petalColor,h){
+  h=h||14;const p=new PB(10,h);
+  // stem
+  for(let y=h-6;y<h;y++)p.setC(5,y,nz(hx('#3a7020'),5,y,5));
+  // leaves
+  p.setC(4,h-4,nz(hx('#4a8c30'),4,h-4,5));p.setC(6,h-3,nz(hx('#4a8c30'),6,h-3,5));
+  // petals
+  const py=h-7;
+  p.setC(5,py-1,petalColor);p.setC(4,py,petalColor);p.setC(5,py,lt(petalColor,.3));
+  p.setC(6,py,petalColor);p.setC(5,py+1,dk(petalColor,.15));
+  return p;
+}
+
+// --- Grass tuft ---
+function mkGrass(w,variant){
+  const p=new PB(w,10);
+  for(let x=1;x<w-1;x++){
+    const h=2+Math.floor(H(x+variant*100,5555)*4);
+    for(let dy=0;dy<h;dy++){const gy=9-dy;
+      const c=dy>h/2?pk(P.fol,x,dy+variant*77):pk(P.folDk,x,dy+variant*77);
+      p.setC(x,gy,nz(c,x,gy,8))}}
+  return p;
+}
+
+// ================================================================
+//  COMPOSE TILESET
+// ================================================================
+const SW=370, SH=280;
+const sheet=new PB(SW,SH);
+
+// Fill background
+for(let y=0;y<SH;y++)for(let x=0;x<SW;x++)sheet.set(x,y,192,192,184);
+
+// --- Row 1: Cottage + Crates + Fences + Bushes ---
+blit(mkCottage(), sheet, 2, 4);
+
+// Crates
+blit(mkCrate(14,14,false), sheet, 92, 6);
+blit(mkCrate(14,14,true), sheet, 110, 6);
+
+// Fences
+blit(mkFence('panel'), sheet, 92, 28);
+blit(mkFence('gate'), sheet, 118, 28);
+blit(mkFence('post'), sheet, 144, 40);
+
+// Bushes - large, medium, small
+blit(mkBush(30,26,13,11), sheet, 160, 4);    // large round
+blit(mkBush(24,20,10,8), sheet, 196, 8);      // medium
+
+// Hedge tiles (top-down, square)
+blit(mkHedge(24,24,null), sheet, 228, 4);  // full
+blit(mkHedge(24,24,(x,y,w,h)=>x<w*.7&&y<h*.7), sheet, 256, 4);  // corner
+blit(mkHedge(24,24,(x,y,w,h)=>y<h*.6), sheet, 284, 4);  // top half
+
+// Second row of bushes
+blit(mkBush(20,16,8,6), sheet, 316, 10);  // small bush
+blit(mkBush(26,22,11,9), sheet, 160, 36); // another medium
+blit(mkHedge(24,24,(x,y,w,h)=>x<w*.6), sheet, 192, 36); // left hedge
+blit(mkHedge(24,24,(x,y,w,h)=>x<w*.6&&y<h*.6), sheet, 220, 36); // corner
+blit(mkHedge(14,14,null), sheet, 248, 44); // small full
+
+// Stumps & rocks top area
+blit(mkStumpTop(), sheet, 270, 36);
+blit(mkRock(22,18,9,7), sheet, 298, 40); // large rock face
+blit(mkCliff(24,14), sheet, 324, 36);     // cliff edge
+blit(mkRockPile(3,18,12), sheet, 346, 44);
+
+// --- Row 2: Cobblestones + Birdhouses + Flowers ---
+// Cobblestone tiles
+blit(mkCobble(28,28,null), sheet, 2, 114);  // full
+blit(mkCobble(28,28,(x,y,w,h)=>x<w-4||y<h-4), sheet, 34, 114); // corner cut
+blit(mkCobble(28,14,null), sheet, 66, 114); // half horizontal
+blit(mkCobble(40,14,null), sheet, 98, 114); // long strip
+blit(mkCobble(28,28,(x,y,w,h)=>{const cx2=w/2,cy2=h/2;return Math.abs(x-cx2)<w*.4||Math.abs(y-cy2)<h*.4}), sheet, 2, 146); // cross
+blit(mkCobble(28,28,(x,y,w,h)=>y<h*.6||x<w*.6), sheet, 34, 146); // L shape
+
+// Birdhouses
+blit(mkBirdhouse(0), sheet, 150, 112);
+blit(mkBirdhouse(1), sheet, 172, 112);
+
+// Flowers
+const flColors=[hx('#e8d040'),hx('#e8c030'),hx('#e07030'),hx('#e04040'),hx('#e06080'),hx('#e080a0')];
+flColors.forEach((c,i)=>blit(mkFlower(c),sheet,200+i*14,118));
+
+// Grass tufts
+for(let i=0;i<6;i++)blit(mkGrass(10+Math.floor(H(i,777)*6),i),sheet,290+i*14,124);
+
+// --- Row 3: Grass row + Stumps + Rock piles ---
+// grass/flower decorative row
+for(let i=0;i<8;i++){
+  const gp=mkGrass(12,i+10);blit(gp,sheet,2+i*18,178);
+  if(H(i,888)>.4){const fc=flColors[Math.floor(H(i,999)*flColors.length)];blit(mkFlower(fc,12),sheet,8+i*18,176)}}
+
+// more grass patches
+for(let i=0;i<5;i++)blit(mkGrass(8,i+20),sheet,150+i*16,184);
+
+// Stumps
+blit(mkStump(0), sheet, 2, 204);
+blit(mkStump(1), sheet, 30, 204);
+blit(mkStump(0), sheet, 58, 204); // with extra detail
+
+// Small bush on ground
+const sb=new PB(16,16);for(let y=12;y<16;y++)for(let x=0;x<16;x++)sb.setC(x,y,nz(pk(P.grass,x*2,y*3),x,y,10));
+texFoliage(sb,8,8,6,5,P.fol,P.folDk,.75);pp(sb,.08,.24);
+blit(sb,sheet,86,210);
+
+// broken log
+const lg=new PB(20,16);for(let y=12;y<16;y++)for(let x=0;x<20;x++)lg.setC(x,y,nz(pk(P.grass,x*2,y*3),x,y,10));
+texBark(lg,2,7,18,13,P.bark);
+for(let y=6;y<10;y++)for(let x=1;x<7;x++){const dx2=(x-4)/3,dy2=(y-7.5)/2,d=Math.sqrt(dx2*dx2+dy2*dy2);if(d>1.1)continue;
+  const ring=Math.sin(d*6)*.5+.5;lg.setC(x,y,nz([...P.wdlt[Math.min(P.wdlt.length-1,Math.floor(ring*P.wdlt.length))]],x,y,5))}
+pp(lg,.08,.24);blit(lg,sheet,106,210);
+
+// Rock piles - various sizes
+blit(mkRockPile(5,22,16), sheet, 222, 210);
+blit(mkRockPile(4,18,14), sheet, 248, 212);
+blit(mkRockPile(3,16,12), sheet, 270, 214);
+blit(mkRockPile(2,12,10), sheet, 290, 216);
+blit(mkRockPile(6,24,18), sheet, 306, 208);
+
+// Large rocks
+blit(mkRock(18,14,7,5), sheet, 334, 212);
+blit(mkRock(14,12,5,4), sheet, 354, 214);
+
+// Extra scattered small rocks
+blit(mkRockPile(2,10,8), sheet, 140, 216);
+blit(mkRockPile(1,8,6), sheet, 156, 218);
+
+// more flowers in row 3
+for(let i=0;i<4;i++){const fc=flColors[Math.floor(H(i+50,999)*flColors.length)];blit(mkFlower(fc,10),sheet,170+i*12,212)}
+
+// ================================================================
+//  RENDER
+// ================================================================
+const SCALE=3;
+const cv=document.getElementById('sheet');
+cv.width=SW*SCALE;cv.height=SH*SCALE;
+const ctx=cv.getContext('2d');
+for(let y=0;y<SH;y++)for(let x=0;x<SW;x++){
+  const i=(y*SW+x)*3;
+  ctx.fillStyle=`rgb(${sheet.rgb[i]},${sheet.rgb[i+1]},${sheet.rgb[i+2]})`;
+  ctx.fillRect(x*SCALE,y*SCALE,SCALE,SCALE);
+}
+
+})();
+</script>
+</body>
+</html>

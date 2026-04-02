@@ -1,12 +1,31 @@
 ---
 name: pixelart
-description: Generate pixel art as self-contained HTML files. Pure code, zero dependencies. Supports 8x8 icons to full landscape scenes.
-argument-hint: [size] [prompt]
+description: Generate pixel art as self-contained HTML files. Pure code, zero dependencies. Supports 8x8 icons to full landscape scenes, game tilesets, and procedural assets.
+argument-hint: [size] [prompt] or tileset [theme]
 ---
 
 Generate a pixel art HTML file based on the user's request: $ARGUMENTS
 
-Parse the input to extract **size** (e.g. `16x16`, `32x32`, `192x128`) and **prompt** (the subject to draw). If size is omitted, default to `16x16`.
+### Input Modes
+
+**Mode 1 — Single asset (default):**
+Parse input to extract **size** (e.g. `16x16`, `32x32`, `192x128`) and **prompt**. If size is omitted, default to `16x16`.
+
+```
+/pixelart 32x32, a wizard with a glowing staff
+/pixelart 80x85, stone cottage with red tile roof
+/pixelart 50x40, a fox sitting in grass
+```
+
+**Mode 2 — Tileset:**
+When prompt contains **"tileset"**, **"sprite sheet"**, or **"asset pack"**, generate a complete sheet of related assets on a single canvas.
+
+```
+/pixelart tileset, medieval village
+/pixelart tileset, dungeon crawler
+/pixelart tileset, forest nature pack
+/pixelart tileset, farm animals
+```
 
 ---
 
@@ -267,6 +286,77 @@ LLM outputs compact declarations:
 ### Rendering
 
 Uses `<canvas>` with `PixelBuffer` class. Each pixel is individually addressable. Rendered at configurable scale (4–6x typical) with `image-rendering: pixelated`.
+
+---
+
+## Tileset Mode
+
+When prompt implies **tileset / sprite sheet / asset pack**, generate a complete sheet of related game-ready assets on a single canvas.
+
+### Architecture
+
+```
+1. Shared engine (PB, hash, color utils, geometry, all texture generators, post-processing)
+2. Shared palette (all assets use the same color sets for consistency)
+3. Asset factories — each returns a standalone PB:
+     function mkCottage() { const p = new PB(80,100); /* layers */ return pp(p); }
+     function mkBush(rx,ry) { const p = new PB(...); texFoliage(...); return pp(p); }
+     function mkRock(w,h) { ... }
+4. Composition — blit all assets onto a master canvas:
+     const sheet = new PB(370, 280);
+     blit(mkCottage(), sheet, 2, 4);
+     blit(mkBush(13,11), sheet, 160, 4);
+5. Render master canvas at 3x scale
+```
+
+### Tileset Composition Rules
+
+1. **Layout**: Place the largest/hero asset (building, character) in the top-left. Group related smaller assets by category across the sheet.
+2. **Scale**: Use 3x rendering scale (gives clear pixels without being too large). Sheet canvas is typically 340–400 × 250–300 pixels.
+3. **Background**: Neutral gray `#c0c0b8` fills the sheet — standard tileset convention.
+4. **Shared palette**: Define ALL color palettes upfront as a shared `P` object. Every factory reads from `P`. This guarantees style consistency.
+5. **Post-processing**: Apply `pp()` (autoShade + edgeOutline) to each individual asset PB, NOT to the whole sheet. This prevents cross-asset shading artifacts.
+6. **Blit helper**: Use `blit(src, dst, dx, dy)` to copy asset PBs onto the sheet at specific positions.
+
+### Asset Factory Pattern
+
+Each asset type is a function that returns a self-contained `PB`:
+
+```javascript
+// Configurable factory — same function, different params → different variants
+function mkBush(w, h, rx, ry) {
+  const p = new PB(w, h);
+  texFoliage(p, w/2, h/2, rx, ry, P.fol, P.folDk, .82);
+  return pp(p);  // auto-shade + outline
+}
+
+// Variant factory — type parameter controls shape
+function mkFence(type) {  // 'panel' | 'gate' | 'post'
+  const p = new PB(22, 34);
+  // posts, beams, iron bands based on type
+  return pp(p);
+}
+
+// Call with different params to create variants:
+blit(mkBush(30,26,13,11), sheet, 160, 4);   // large
+blit(mkBush(24,20,10,8), sheet, 196, 8);     // medium
+blit(mkBush(14,12,5,4), sheet, 316, 10);     // small
+```
+
+### Theme → Asset List
+
+When generating a tileset, auto-decide which assets to include based on theme:
+
+| Theme | Hero asset | Structures | Nature | Terrain | Details |
+|-------|-----------|------------|--------|---------|---------|
+| **Medieval village** | Stone cottage | Fences, crates, well, birdhouse | Bushes, trees, flowers | Cobblestone paths, rocks, cliffs | Grass, stumps, pebbles |
+| **Dungeon** | Castle gate | Torches, doors, chests, barrels | Moss, vines, mushrooms | Stone floor tiles, walls, pits | Bones, chains, potions |
+| **Forest** | Large oak tree | Campfire, tent, log cabin | Bushes, ferns, saplings | Dirt paths, streams, boulders | Mushrooms, berries, acorns |
+| **Farm** | Barn | Fences, troughs, windmill | Crops, haystacks, flowers | Dirt/grass tiles, pond | Chickens, tools, baskets |
+| **Desert** | Sand temple | Obelisk, market stall, well | Cacti, palm trees, tumbleweeds | Sand tiles, dunes, oasis | Pots, bones, scorpions |
+| **Winter** | Snow cabin | Ice walls, lampposts, sled | Pine trees, holly, bare trees | Snow tiles, ice patches, paths | Snowmen, icicles, footprints |
+
+Aim for **25–40 assets** per tileset, covering all categories.
 
 ---
 

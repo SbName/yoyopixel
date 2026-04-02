@@ -75,9 +75,13 @@ cp -r yoyopixel/.claude/skills/pixelart ~/.claude/skills/
 /pixelart 24x24, ancient Chinese swordsman in moonlight
 /pixelart 80x85, stone cottage with red tile roof
 /pixelart 50x40, a fox sitting in grass
+
+# Tileset mode — generates 25-40 related assets on one sheet
+/pixelart tileset, medieval village
+/pixelart tileset, dungeon crawler
 ```
 
-Two inputs: **size** + **prompt**. That's the entire interface.
+Two input modes: **size + prompt** for single assets, **tileset + theme** for full sprite sheets.
 
 Claude auto-decides everything based on size and prompt:
 - **Size** determines detail level, max colors, and shading complexity
@@ -137,6 +141,13 @@ Game-ready assets using region-based procedural textures — LLM declares region
 </table>
 
 12 procedural texture algorithms: stone, tiles, stucco, wood, planks, bark, foliage, fur, scales, feathers, spiral, smooth
+
+**Full tileset demo:**
+
+<p align="center">
+<img src="assets/tileset-village.png" width="760">
+</p>
+<p align="center"><sub>Village Tileset · ~35 assets · cottage, fences, crates, bushes, cobblestone paths, birdhouses, flowers, stumps, rocks</sub></p>
 
 ### Multi-Size Gallery
 
@@ -226,6 +237,7 @@ Install the skill, then:
 | Prompt mentions "fire" | adds ember particles, glow effects |
 | Prompt mentions "sword" | adds gleam animation on weapon pixels |
 | Size `192x128` | canvas mode, FBM noise, procedural generation |
+| Prompt `tileset, village` | tileset mode, ~35 assets, procedural textures, shared palette, single sheet |
 
 Full decision rules → [`pixelart-skill.md`](pixelart-skill.md)
 
@@ -272,7 +284,8 @@ pixelai/
 │
 ├── prototype-cottage.html    ★ Procedural texture engine: stone cottage + tileset
 ├── prototype-gallery.html    ★ Style gallery: tower, sakura tree, chest, well
-└── prototype-animals.html    ★ Organic textures: fox, koi, owl, snail
+├── prototype-animals.html    ★ Organic textures: fox, koi, owl, snail
+└── tileset-village.html      ★ Full village tileset (~35 assets on one sheet)
 ```
 
 ---
