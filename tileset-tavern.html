@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YoYoPixel · Tavern Interior Tileset</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:#1a1a2e;font-family:'Courier New',monospace;color:#888;padding:30px}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;border-radius:4px}
+  h1{font-size:15px;letter-spacing:3px;color:#aaa}
+  .info{font-size:11px;color:#555;text-align:center;line-height:1.7}
+  .tag{display:inline-block;background:#2a2a4e;color:#7a7aaa;padding:1px 6px;border-radius:3px;font-size:9px;margin:1px}
+</style>
+</head>
+<body>
+<h1>TAVERN INTERIOR TILESET &middot; ENGINE V2</h1>
+<canvas id="sheet"></canvas>
+<div class="info">
+  ~45 assets · top-down RPG furniture · v2 engine<br>
+  <span class="tag">texCloth</span><span class="tag">texMetal</span><span class="tag">texPlanks</span>
+  <span class="tag">texWood</span><span class="tag">texCrystal</span><span class="tag">blitAlpha</span>
+  <span class="tag">Multi-pass Shading</span>
+</div>
+<script>
+(() => {
+'use strict';
+
+// ================================================================
+//  ENGINE V2 (compact)
+// ================================================================
+class PB {
+  constructor(w,h){this.w=w;this.h=h;this.data=new Uint8ClampedArray(w*h*4)}
+  set(x,y,r,g,b,a){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return;const i=(y*this.w+x)<<2;this.data[i]=r;this.data[i+1]=g;this.data[i+2]=b;this.data[i+3]=a!==undefined?a:255}
+  setC(x,y,c,a){this.set(x,y,c[0],c[1],c[2],a)}
+  get(x,y){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return null;const i=(y*this.w+x)<<2;if(this.data[i+3]===0)return null;return[this.data[i],this.data[i+1],this.data[i+2],this.data[i+3]]}
+  has(x,y){x|=0;y|=0;return x>=0&&x<this.w&&y>=0&&y<this.h&&this.data[((y*this.w+x)<<2)+3]>0}
+  blend(x,y,c,sA){x|=0;y|=0;if(x<0||x>=this.w||y<0||y>=this.h)return;const i=(y*this.w+x)<<2;const dA=this.data[i+3]/255,s=((sA!==undefined?sA:255))/255,oA=s+dA*(1-s);if(oA===0)return;this.data[i]=((c[0]*s+this.data[i]*dA*(1-s))/oA)|0;this.data[i+1]=((c[1]*s+this.data[i+1]*dA*(1-s))/oA)|0;this.data[i+2]=((c[2]*s+this.data[i+2]*dA*(1-s))/oA)|0;this.data[i+3]=(oA*255)|0}
+}
+function blitA(src,dst,dx,dy,opts){opts=opts||{};const gA=opts.alpha!==undefined?opts.alpha:1;
+  if(opts.contactShadow)for(let y=0;y<src.h;y++)for(let x=0;x<src.w;x++){if(!src.has(x,y))continue;const so=opts.shadowOffset||[1,2];dst.blend(dx+x+so[0],dy+y+so[1],[0,0,0],((opts.shadowAlpha||.18)*255)|0)}
+  for(let y=0;y<src.h;y++)for(let x=0;x<src.w;x++){const c=src.get(x,y);if(!c)continue;const a=(c[3]*gA)|0;if(a>=250)dst.set(dx+x,dy+y,c[0],c[1],c[2],255);else dst.blend(dx+x,dy+y,c,a)}}
+function blit(s,d,dx,dy){for(let y=0;y<s.h;y++)for(let x=0;x<s.w;x++){const c=s.get(x,y);if(!c)continue;d.set(dx+x,dy+y,c[0],c[1],c[2],c[3])}}
+function H(x,y){let n=((x|0)*374761393+(y|0)*668265263+1013904223)|0;n=(((n>>13)^n)*1274126177)|0;return(((n>>16)^n)>>>0)/4294967296}
+function hx(s){return[parseInt(s.slice(1,3),16),parseInt(s.slice(3,5),16),parseInt(s.slice(5,7),16)]}
+function dk(c,a){return c.map(v=>Math.max(0,(v*(1-a))|0))}
+function lt(c,a){return c.map(v=>Math.min(255,(v+(255-v)*a)|0))}
+function nz(c,x,y,r){const n=(H(x*7,y*13)-.5)*r;return c.map(v=>Math.max(0,Math.min(255,(v+n)|0)))}
+function pk(a,x,y){return[...a[Math.floor(H(x,y)*a.length)%a.length]]}
+function inE(x,y,cx,cy,rx,ry){const dx=(x-cx)/rx,dy=(y-cy)/ry;return dx*dx+dy*dy<=1}
+function inRR(x,y,x1,y1,x2,y2,r){if(x<x1||x>=x2||y<y1||y>=y2)return false;const cs=[[x1+r,y1+r],[x2-r,y1+r],[x1+r,y2-r],[x2-r,y2-r]];for(const[cx,cy]of cs){if((x<x1+r||x>=x2-r)&&(y<y1+r||y>=y2-r)){const dx2=x-cx,dy2=y-cy;if(dx2*dx2+dy2*dy2>r*r)return false}}return true}
+
+// Textures
+function texPlanks(pb,x1,y1,x2,y2,pal,ph){for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const row=Math.floor((y-y1)/ph),py2=(y-y1)%ph,t=(x-x1)/(x2-x1);const g=Math.sin(t*10+H(row*77,0)*4+H(row,Math.floor(x/3))*.5)*.5+.5;let c=[...pal[Math.min(pal.length-1,Math.floor(g*pal.length))]];if(py2===0)c=dk(c,.25);const sh=(H(row*99,1)-.5)*12;c=c.map(v=>Math.max(0,Math.min(255,(v+sh)|0)));pb.setC(x,y,nz(c,x,y,6))}}
+function texWood(pb,x1,y1,x2,y2,pal,dir){for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){const t=dir==='v'?(x-x1)/Math.max(1,x2-x1):(y-y1)/Math.max(1,y2-y1);const g=Math.sin(t*12+H(0,Math.floor((dir==='v'?y:x)/2))*2)*.5+.5;pb.setC(x,y,nz([...pal[Math.min(pal.length-1,Math.floor(g*pal.length))]],x,y,8))}}
+function texCloth(pb,test,x1,y1,x2,y2,pal,fA,fF,fD){fA=fA||0;fF=fF||.4;fD=fD||.35;const cos=Math.cos(fA),sin=Math.sin(fA);for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){if(test&&!test(x,y))continue;const along=(x-x1)*cos+(y-y1)*sin;const fold=Math.sin(along*fF)*.5+.5;const ci=Math.min(pal.length-1,Math.floor(fold*pal.length));let c=[...pal[ci]];const micro=Math.sin(along*fF*3.7+1.3)*.15;if(micro>0)c=lt(c,micro*fD);else c=dk(c,-micro*fD);pb.setC(x,y,nz(c,x,y,4))}}
+function texMetal(pb,test,x1,y1,x2,y2,pal,sA,sW){sA=sA||-.5;sW=sW||.12;const cos=Math.cos(sA),sin=Math.sin(sA);for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++){if(test&&!test(x,y))continue;const nx=(x-x1)/Math.max(1,x2-x1-1),ny=(y-y1)/Math.max(1,y2-y1-1);const amb=nx*.3+ny*.4;const ci=Math.min(pal.length-1,Math.floor(amb*pal.length));let c=[...pal[ci]];const proj=nx*cos+ny*sin;const sd=Math.abs(proj-.35);if(sd<sW)c=lt(c,(1-sd/sW)*.45);const s2=Math.abs(proj-.7);if(s2<sW*.6)c=lt(c,(1-s2/(sW*.6))*.15);pb.setC(x,y,nz(c,x,y,3))}}
+
+// Post-processing
+function pp(pb,opts){opts=opts||{};
+  // AO
+  let sn=new Uint8ClampedArray(pb.data);const aoS=opts.ao||.12;
+  for(let y=1;y<pb.h-1;y++)for(let x=1;x<pb.w-1;x++){if(!pb.has(x,y))continue;const i=(y*pb.w+x)<<2;let diff=0;const r=sn[i],g=sn[i+1],b=sn[i+2];for(const[dx,dy]of[[-1,0],[1,0],[0,-1],[0,1]]){const ni=((y+dy)*pb.w+(x+dx))<<2;if(sn[ni+3]===0)continue;if(Math.abs(sn[ni]-r)+Math.abs(sn[ni+1]-g)+Math.abs(sn[ni+2]-b)>40)diff++}if(diff>=2){const ao=aoS*(diff/4);pb.data[i]=(pb.data[i]*(1-ao))|0;pb.data[i+1]=(pb.data[i+1]*(1-ao))|0;pb.data[i+2]=(pb.data[i+2]*(1-ao))|0}}
+  // Light
+  sn=new Uint8ClampedArray(pb.data);const lS=opts.light||.1;
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){if(!pb.has(x,y))continue;const i=(y*pb.w+x)<<2;const c=[sn[i],sn[i+1],sn[i+2]];const l=(.5-x/pb.w)*lS+(.5-y/pb.h)*lS*.6;const a=l>0?lt(c,l):dk(c,-l);pb.data[i]=a[0];pb.data[i+1]=a[1];pb.data[i+2]=a[2]}
+  // Outline
+  sn=new Uint8ClampedArray(pb.data);const olA=opts.outline||.28;
+  for(let y=0;y<pb.h;y++)for(let x=0;x<pb.w;x++){if(!pb.has(x,y))continue;let e=false;for(const[ex,ey]of[[-1,0],[1,0],[0,-1],[0,1]])if(!pb.has(x+ex,y+ey)){e=true;break}if(e){const i=(y*pb.w+x)<<2;pb.data[i]=(sn[i]*(1-olA))|0;pb.data[i+1]=(sn[i+1]*(1-olA))|0;pb.data[i+2]=(sn[i+2]*(1-olA))|0}}
+  return pb}
+
+// ================================================================
+//  PALETTES
+// ================================================================
+const P={
+  dkWood: ['#3a2018','#4a2820','#5a3828','#2a1810'].map(hx),
+  mdWood: ['#5a3520','#6b4530','#7b5540','#4a2a18'].map(hx),
+  ltWood: ['#8b6040','#9b7050','#7b5535','#a08060'].map(hx),
+  padded: ['#b89050','#c8a060','#a88040','#d8b070','#e0c080'].map(hx),
+  leather:['#8a4020','#9a5030','#7a3818','#aa6038','#ba7048'].map(hx),
+  cloth_w:['#c8c0b0','#d8d0c0','#e8e0d8','#f0e8e0','#f8f4f0'].map(hx),
+  cloth_r:['#6a2020','#803030','#983838','#b04848','#c85858'].map(hx),
+  carpet: ['#3a3868','#4a4878','#5a5888','#3030608','#6a6898'].map(hx),
+  iron:   ['#2a2a30','#3a3a42','#4a4a55','#5a5a68','#707080','#9090a0'].map(hx),
+  steel:  ['#404858','#506070','#607888','#7090a0','#90b0c0','#b0d0e0'].map(hx),
+  gold:   ['#604010','#806020','#a08030','#c0a040','#e0c060'].map(hx),
+  bottle: ['#204040','#285050','#306060','#407878','#509090'].map(hx),
+  bottleG:['#204020','#285028','#306030','#408040','#509050'].map(hx),
+  glass:  ['#8090a0','#90a0b0','#a0b0c0','#b8c8d0','#d0e0e8'].map(hx),
+  plant:  ['#2a6a18','#3a7a20','#4a8a28','#5a9a30'].map(hx),
+  ceramic:['#c8b898','#b8a888','#d8c8a8','#a89878'].map(hx),
+  food_y: hx('#d0a830'), food_r: hx('#c04030'), food_g: hx('#50a040'),
+};
+
+// ================================================================
+//  ASSET FACTORIES
+// ================================================================
+
+// --- Bar Counter (L-shape, top-down, 100×40) ---
+function mkBar(){
+  const p=new PB(110,42);
+  // Horizontal bar
+  texPlanks(p,0,8,100,14,P.dkWood,3);  // front edge
+  texPlanks(p,0,14,100,36,P.padded,5);  // padded top
+  texPlanks(p,0,36,100,42,P.dkWood,3);  // back edge
+  // Vertical part (right)
+  texPlanks(p,90,0,96,42,P.dkWood,3);
+  texPlanks(p,96,0,110,42,P.padded,5);
+  // Corner fill
+  texPlanks(p,90,8,100,42,P.padded,5);
+  // Frame trim
+  for(let x=0;x<110;x++){if(p.has(x,8))p.setC(x,8,nz(pk(P.dkWood,x,8),x,8,5));if(p.has(x,41))p.setC(x,41,nz(pk(P.dkWood,x,41),x,41,5))}
+  // Hooks on back wall
+  for(let i=0;i<4;i++){const hx2=15+i*20;p.setC(hx2,6,hx('#5a5a60'));p.setC(hx2,7,hx('#6a6a70'))}
+  // Small door/panel
+  texPlanks(p,8,0,30,8,P.mdWood,2);
+  return pp(p,{ao:.1,light:.1,outline:.26})
+}
+
+// --- Dining Table with Chairs (top-down, 52×42) ---
+function mkDiningTable(){
+  const p=new PB(52,42);
+  // Table
+  texPlanks(p,8,8,44,34,P.dkWood,4);
+  // Table edge
+  for(let x=8;x<44;x++){p.setC(x,8,nz(dk(pk(P.dkWood,x,8),.2),x,8,4));p.setC(x,33,nz(dk(pk(P.dkWood,x,33),.2),x,33,4))}
+  for(let y=8;y<34;y++){p.setC(8,y,nz(dk(pk(P.dkWood,8,y),.2),8,y,4));p.setC(43,y,nz(dk(pk(P.dkWood,43,y),.2),43,y,4))}
+  // Chairs (6 around table)
+  const chairs=[[14,2],[26,2],[38,2],[14,36],[26,36],[38,36]];
+  chairs.forEach(([cx,cy])=>{
+    for(let y=cy;y<cy+6;y++)for(let x=cx;x<cx+6;x++)
+      if(inRR(x,y,cx,cy,cx+6,cy+6,1))p.setC(x,y,nz(pk(P.dkWood,x*3,y*5),x,y,6))});
+  return pp(p,{ao:.12,light:.1,outline:.26})
+}
+
+// --- Round Table with Chairs (top-down, 32×32) ---
+function mkRoundTable(hasCloth,itemType){
+  const p=new PB(34,34);
+  // Chairs (4 around)
+  [[17,1],[17,27],[1,14],[27,14]].forEach(([cx,cy])=>{
+    for(let y=cy;y<cy+6;y++)for(let x=cx;x<cx+6;x++)
+      if(inRR(x,y,cx,cy,cx+6,cy+6,1))p.setC(x,y,nz(pk(P.dkWood,x*3,y*5),x,y,6))});
+  // Table circle
+  const pal=hasCloth?P.cloth_w:P.dkWood;
+  for(let y=5;y<29;y++)for(let x=5;x<29;x++)
+    if(inE(x,y,17,17,12,12)){let c=pk(pal,x*3,y*5);if(hasCloth){const fold=Math.sin(x*.5+y*.3)*.5+.5;c=fold>.5?lt(c,.06):dk(c,.04)}p.setC(x,y,nz(c,x,y,5))}
+  // Items on table
+  if(itemType==='plate'){for(let y=13;y<21;y++)for(let x=13;x<21;x++)if(inE(x,y,17,17,4,4))p.setC(x,y,nz(pk(P.ceramic,x,y),x,y,5))}
+  if(itemType==='food'){p.setC(16,16,P.food_y);p.setC(17,16,P.food_r);p.setC(18,16,P.food_g);p.setC(17,17,dk(P.food_y,.2))}
+  if(itemType==='candle'){p.setC(17,16,hx('#e0c040'));p.setC(17,15,hx('#f0e060'));p.setC(17,14,hx('#f8f0a0'))}
+  return pp(p,{ao:.1,light:.1,outline:.24})
+}
+
+// --- Bookshelf (36×38) ---
+function mkBookshelf(){
+  const p=new PB(36,38);
+  // Frame
+  texPlanks(p,0,0,36,38,P.dkWood,4);
+  // Shelves
+  for(const sy of[12,24]){for(let x=2;x<34;x++)p.setC(x,sy,nz(dk(pk(P.dkWood,x,sy),.15),x,sy,4))}
+  // Back panel (darker)
+  for(let y=1;y<12;y++)for(let x=2;x<34;x++)p.setC(x,y,nz(dk(pk(P.dkWood,x,y),.3),x,y,5));
+  for(let y=13;y<24;y++)for(let x=2;x<34;x++)p.setC(x,y,nz(dk(pk(P.dkWood,x,y),.3),x,y,5));
+  for(let y=25;y<36;y++)for(let x=2;x<34;x++)p.setC(x,y,nz(dk(pk(P.dkWood,x,y),.3),x,y,5));
+  // Bottles on shelves
+  const bottleColors=[P.bottle,P.bottleG,P.glass,P.bottle,P.bottleG];
+  for(let shelf=0;shelf<2;shelf++){
+    const sy2=shelf===0?4:16;
+    for(let i=0;i<5;i++){const bx=4+i*6;
+      for(let y=sy2;y<sy2+7;y++)for(let x=bx;x<bx+3;x++){
+        const pal=bottleColors[(i+shelf*2)%bottleColors.length];
+        const ny=(y-sy2)/7;let c=pk(pal,x+i*10,y);if(ny<.2)c=lt(c,.15);if(ny>.8)c=dk(c,.1);
+        p.setC(x,y,nz(c,x,y,4))}
+      // Cork/cap
+      p.setC(bx+1,sy2-1,nz(hx('#8a6040'),bx+1,sy2-1,5))}}
+  return pp(p,{ao:.15,light:.1,outline:.28})
+}
+
+// --- Shelf/Cabinet (32×36) ---
+function mkShelf(type){
+  const p=new PB(32,36);
+  if(type==='open'){
+    texPlanks(p,0,0,32,36,P.mdWood,4);
+    for(const sy of[10,20,30])for(let x=2;x<30;x++)p.setC(x,sy,nz(dk(pk(P.mdWood,x,sy),.15),x,sy,4));
+    for(let y=1;y<36;y++){p.setC(1,y,nz(pk(P.mdWood,1,y),1,y,5));p.setC(30,y,nz(pk(P.mdWood,30,y),30,y,5))}
+  } else { // slatted
+    texPlanks(p,0,0,32,36,P.dkWood,4);
+    for(let y=2;y<34;y+=3)for(let x=2;x<30;x++)p.setC(x,y,nz(dk(pk(P.dkWood,x,y),.4),x,y,4));
+  }
+  return pp(p,{ao:.12,light:.1,outline:.26})
+}
+
+// --- Bed (48×28) ---
+function mkBed(pillows){
+  const p=new PB(48,28);
+  // Frame
+  texPlanks(p,0,4,48,28,P.leather,4);
+  // Headboard
+  texPlanks(p,0,0,48,6,P.dkWood,3);
+  // Blanket
+  texCloth(p,null,2,8,46,26,P.cloth_r,0,.35,.3);
+  // Pillows
+  const pCount=pillows||2;
+  for(let i=0;i<pCount;i++){const px=8+i*14;
+    for(let y=6;y<14;y++)for(let x=px;x<px+12;x++)
+      if(inRR(x,y,px,6,px+12,14,2))p.setC(x,y,nz(pk(P.cloth_w,x*3,y*5),x,y,4))}
+  return pp(p,{ao:.12,light:.1,outline:.26})
+}
+
+// --- Carpet/Rug (56×36) ---
+function mkCarpet(){
+  const p=new PB(56,36);
+  for(let y=0;y<36;y++)for(let x=0;x<56;x++){
+    if(!inRR(x,y,0,0,56,36,6))continue;
+    // Border pattern
+    const border=x<3||x>=53||y<3||y>=33;
+    const inner=x>=3&&x<53&&y>=3&&y<33;
+    if(border){const stripe=((x+y)%4<2);p.setC(x,y,nz(stripe?hx('#4a4878'):hx('#5a5888'),x,y,4))}
+    else{
+      // Interior with subtle pattern
+      const px=(x-3)/(50),py=(y-3)/(30);
+      let c=hx('#3a3868');
+      // Stars/dots pattern
+      if(H(Math.floor(x/6)*7,Math.floor(y/6)*11)>.7)c=lt(c,.08);
+      p.setC(x,y,nz(c,x,y,4))}}
+  return pp(p,{ao:.06,light:.08,outline:.2})
+}
+
+// --- Chair (side view, 10×16) ---
+function mkChair(){
+  const p=new PB(10,16);
+  // Back
+  texPlanks(p,2,0,8,10,P.dkWood,3);
+  // Seat
+  texPlanks(p,1,8,9,12,P.dkWood,2);
+  // Legs
+  texWood(p,1,12,3,16,P.dkWood,'v');
+  texWood(p,7,12,9,16,P.dkWood,'v');
+  return pp(p,{ao:.1,light:.1,outline:.26})
+}
+
+// --- Weapons ---
+function mkSword(){
+  const p=new PB(8,32);
+  // Blade
+  texMetal(p,null,3,0,6,22,P.steel,-.4,.12);
+  // Guard
+  texMetal(p,null,1,21,8,24,P.gold,-.3,.15);
+  // Grip
+  texWood(p,3,24,6,30,P.dkWood,'v');
+  // Pommel
+  p.setC(3,30,hx('#c0a040'));p.setC(4,30,hx('#e0c060'));p.setC(5,30,hx('#c0a040'));
+  p.setC(4,31,hx('#a08030'));
+  return pp(p,{ao:.08,light:.1,outline:.28})
+}
+function mkStaff(){
+  const p=new PB(6,34);
+  texWood(p,2,6,5,32,P.mdWood,'v');
+  // Gem on top
+  for(let y=0;y<6;y++)for(let x=1;x<5;x++)if(inE(x,y,3,3,2,2.5)){
+    let c=hx('#d04020');if(y<2)c=lt(c,.3);p.setC(x,y,nz(c,x,y,5))}
+  // Metal bands
+  for(const by of[8,28])texMetal(p,null,1,by,5,by+2,P.gold,-.3,.15);
+  return pp(p,{ao:.08,light:.1,outline:.28})
+}
+function mkDagger(){
+  const p=new PB(6,18);
+  texMetal(p,null,2,0,5,12,P.steel,-.4,.12);
+  texMetal(p,null,1,11,6,13,P.iron,-.3,.12);
+  texWood(p,2,13,5,17,P.dkWood,'v');
+  return pp(p,{ao:.08,light:.1,outline:.28})
+}
+function mkBow(){
+  const p=new PB(14,28);
+  // Curved limb
+  for(let t=0;t<28;t++){const angle=(t/28-.5)*Math.PI*.8;
+    const bx=7+Math.sin(angle)*5,by=t;const w=1+Math.cos(angle)*.5;
+    for(let dx=-w;dx<=w;dx++)p.setC(Math.round(bx+dx),by,nz(pk(P.mdWood,Math.round(bx+dx)*3,by*5),Math.round(bx+dx),by,6))}
+  // String
+  for(let y=2;y<26;y++)p.setC(7,y,nz(hx('#a09080'),7,y,4));
+  return pp(p,{ao:.06,light:.1,outline:.26})
+}
+
+// --- Barrel (20×22) ---
+function mkBarrel(type){
+  const p=new PB(20,22);
+  // Barrel body
+  for(let y=2;y<20;y++)for(let x=2;x<18;x++){
+    const ny=(y-2)/18;const bulge=1+Math.sin(ny*Math.PI)*.12;
+    if(!inE(x,y,10,11,8*bulge,9))continue;
+    const t=(x-2)/16;const g=Math.sin(t*10+H(0,Math.floor(y/2))*2)*.5+.5;
+    let c=[...P.ltWood[Math.min(P.ltWood.length-1,Math.floor(g*P.ltWood.length))]];
+    p.setC(x,y,nz(c,x,y,6))}
+  // Metal bands
+  for(const by of[4,10,16])for(let x=3;x<17;x++)if(p.has(x,by))p.setC(x,by,nz(pk(P.iron,x,by),x,by,4));
+  // Top
+  if(type==='open')for(let y=0;y<4;y++)for(let x=4;x<16;x++)if(inE(x,y,10,2,6,2))p.setC(x,y,nz(dk(pk(P.dkWood,x,y),.3),x,y,5));
+  if(type==='wine')for(let y=0;y<4;y++)for(let x=4;x<16;x++)if(inE(x,y,10,2,6,2))p.setC(x,y,nz(hx('#401020'),x,y,5));
+  return pp(p,{ao:.12,light:.1,outline:.26})
+}
+
+// --- Potted Plant (12×18) ---
+function mkPlant(variant){
+  const p=new PB(12,18);
+  // Pot
+  for(let y=12;y<18;y++)for(let x=2;x<10;x++){
+    const ny=(y-12)/6;const w=3+ny*1.5;if(Math.abs(x-6)>w)continue;
+    p.setC(x,y,nz(pk(P.ceramic,x*3,y*5),x,y,5))}
+  // Leaves
+  const lPal=P.plant;
+  if(variant===0){// Tall plant
+    texWood(p,5,6,7,13,P.plant,'v');
+    for(const[lx,ly,a]of[[3,4,-0.5],[8,3,0.5],[2,7,-0.6],[9,6,0.6]])
+      for(let i=0;i<4;i++){const px=lx+Math.cos(a)*i,py=ly+Math.sin(a)*i*.5;
+        p.setC(Math.round(px),Math.round(py),nz(pk(lPal,Math.round(px),Math.round(py)),Math.round(px),Math.round(py),6))}
+  } else {// Short leafy
+    for(let y=2;y<12;y++)for(let x=1;x<11;x++)
+      if(inE(x,y,6,7,5,5)&&H(x*5,y*7)<.7)p.setC(x,y,nz(pk(lPal,x*3,y*5),x,y,6))}
+  return pp(p,{ao:.08,light:.1,outline:.24})
+}
+
+// --- Candle/Bottle (6×14) ---
+function mkCandle(pal,hasFlame){
+  const p=new PB(6,14);
+  // Body
+  for(let y=4;y<14;y++)for(let x=1;x<5;x++){
+    const ny=(y-4)/10;let c=pk(pal,x*3,y*5);if(ny<.2)c=lt(c,.1);p.setC(x,y,nz(c,x,y,4))}
+  // Top/cap
+  if(hasFlame){p.setC(2,3,hx('#e0c040'));p.setC(3,2,hx('#f0e060'));p.setC(3,1,hx('#f8f0a0'));p.setC(3,3,hx('#d0a030'))}
+  else{p.setC(2,3,nz(pk(P.dkWood,2,3),2,3,4));p.setC(3,3,nz(pk(P.dkWood,3,3),3,3,4))}
+  return pp(p,{ao:.06,light:.08,outline:.22})
+}
+
+// --- Food Bowl (10×10) ---
+function mkBowl(foodColor){
+  const p=new PB(10,10);
+  for(let y=2;y<10;y++)for(let x=1;x<9;x++)
+    if(inE(x,y,5,6,4,4)){let c=pk(P.ceramic,x*3,y*5);p.setC(x,y,nz(c,x,y,5))}
+  // Food
+  for(let y=2;y<6;y++)for(let x=2;x<8;x++)
+    if(inE(x,y,5,4,3,2.5)){let c=[...foodColor];if(y<3)c=lt(c,.2);p.setC(x,y,nz(c,x,y,6))}
+  return pp(p,{ao:.08,light:.08,outline:.22})
+}
+
+// --- Sofa/Bench corner (24×24) ---
+function mkSofa(){
+  const p=new PB(28,24);
+  // L-shape frame
+  texPlanks(p,0,12,28,24,P.leather,4); // bottom
+  texPlanks(p,0,0,12,24,P.leather,4);  // left
+  // Cushion
+  texCloth(p,(x,y)=>x>=2&&x<26&&y>=14&&y<22&&!(x<10&&y<12),2,14,26,22,P.cloth_r,0,.5,.3);
+  texCloth(p,(x,y)=>x>=2&&x<10&&y>=2&&y<22,2,2,10,22,P.cloth_r,Math.PI/2,.5,.3);
+  return pp(p,{ao:.12,light:.1,outline:.26})
+}
+
+// --- Small Items ---
+function mkSmallItem(type){
+  const p=new PB(8,8);
+  if(type==='book'){for(let y=1;y<7;y++)for(let x=1;x<7;x++){
+    const edge=x===1||x===6;p.setC(x,y,nz(edge?hx('#3a2818'):hx('#4060a0'),x,y,5))}}
+  if(type==='potion'){for(let y=0;y<8;y++)for(let x=2;x<6;x++){
+    if(y<2){if(x>2&&x<5)p.setC(x,y,nz(hx('#8a6040'),x,y,5))}
+    else if(inE(x,y,4,5,2.5,3)){p.setC(x,y,nz(hx('#3080d0'),x,y,5))}}}
+  if(type==='trophy'){for(let y=0;y<8;y++)for(let x=1;x<7;x++){
+    if(y<4&&inE(x,y,4,2,2.5,2.5))p.setC(x,y,nz(pk(P.gold,x,y),x,y,4));
+    if(y>=5&&x>=2&&x<6)p.setC(x,y,nz(pk(P.gold,x,y),x,y,4))}}
+  if(type==='sack'){for(let y=1;y<8;y++)for(let x=1;x<7;x++){
+    if(inE(x,y,4,5,3,3)){p.setC(x,y,nz(hx('#8a7860'),x,y,6))}
+    if(y<3&&x>2&&x<6)p.setC(x,y,nz(hx('#7a6850'),x,y,6))}}
+  if(type==='scroll'){for(let y=2;y<6;y++)for(let x=0;x<8;x++)p.setC(x,y,nz(hx('#d8c8a0'),x,y,5));
+    p.setC(0,2,hx('#c0a870'));p.setC(0,5,hx('#c0a870'));p.setC(7,2,hx('#c0a870'));p.setC(7,5,hx('#c0a870'))}
+  return pp(p,{ao:.06,light:.08,outline:.22})
+}
+
+// --- Treasure Chest (16×14) ---
+function mkChest(){
+  const p=new PB(16,14);
+  texPlanks(p,0,5,16,14,P.ltWood,3);
+  // Lid
+  for(let y=0;y<6;y++)for(let x=0;x<16;x++)
+    if(inRR(x,y,0,0,16,6,2)){const ny=y/6;let c=pk(P.ltWood,x*3,y*5);if(ny<.3)c=lt(c,.08);p.setC(x,y,nz(c,x,y,5))}
+  // Metal bands
+  for(const by of[2,8])for(let x=0;x<16;x++)if(p.has(x,by))p.setC(x,by,nz(pk(P.iron,x,by),x,by,4));
+  // Lock
+  p.setC(7,5,hx('#c0a040'));p.setC(8,5,hx('#e0c060'));p.setC(7,6,hx('#a08030'));p.setC(8,6,hx('#c0a040'));
+  return pp(p,{ao:.1,light:.1,outline:.26})
+}
+
+// --- Long Bench (36×12) ---
+function mkBench(){
+  const p=new PB(36,12);
+  texPlanks(p,0,2,36,6,P.dkWood,3);
+  texWood(p,2,6,5,12,P.dkWood,'v');
+  texWood(p,31,6,34,12,P.dkWood,'v');
+  texWood(p,16,6,19,12,P.dkWood,'v');
+  return pp(p,{ao:.1,light:.1,outline:.26})
+}
+
+// ================================================================
+//  COMPOSE TILESET
+// ================================================================
+const SW=420,SH=320;
+const sheet=new PB(SW,SH);
+// Background
+for(let y=0;y<SH;y++)for(let x=0;x<SW;x++)sheet.set(x,y,192,192,184,255);
+
+// --- Row 1: Bar + Dining Table + Shelves ---
+blit(mkBar(),sheet,2,2);
+blit(mkDiningTable(),sheet,130,2);
+blit(mkBookshelf(),sheet,195,2);
+blit(mkShelf('open'),sheet,240,2);
+blit(mkShelf('slatted'),sheet,280,2);
+// Small panel
+const smShelf=new PB(16,24);texPlanks(smShelf,0,0,16,24,P.dkWood,3);
+for(let y=4;y<22;y+=3)for(let x=1;x<15;x++)smShelf.setC(x,y,nz(dk(pk(P.dkWood,x,y),.35),x,y,4));
+pp(smShelf,{ao:.1,light:.1,outline:.24});blit(smShelf,sheet,320,10);
+
+// --- Row 2: Round tables + Weapons + Bed + Carpet ---
+blit(mkRoundTable(true,'plate'),sheet,2,52);
+blit(mkSword(),sheet,42,55);
+blit(mkStaff(),sheet,54,53);
+blit(mkDagger(),sheet,64,60);
+blit(mkBow(),sheet,74,55);
+blit(mkBed(2),sheet,100,55);
+blit(mkBed(3),sheet,155,55);
+blit(mkCarpet(),sheet,215,50);
+blit(mkChair(),sheet,280,60);
+blit(mkChair(),sheet,295,60);
+
+// --- Row 3: Round tables + Plants + Small items + Candles ---
+blit(mkRoundTable(false,null),sheet,2,92);
+blit(mkPlant(0),sheet,42,94);
+blit(mkPlant(1),sheet,58,96);
+// Small decorative items
+const items1=['book','potion','sack','trophy','scroll'];
+items1.forEach((t,i)=>{const it=mkSmallItem(t);blit(it,sheet,78+i*12,100)});
+// Candles & bottles
+const cPals=[P.dkWood,P.bottle,P.bottleG,P.glass,P.bottle];
+cPals.forEach((cp,i)=>blit(mkCandle(cp,i===0),sheet,280+i*10,92));
+
+// --- Row 4: Tables + Barrels + Food bowls ---
+blit(mkRoundTable(true,'food'),sheet,2,130);
+blit(mkRoundTable(true,'candle'),sheet,2,170);
+blit(mkBarrel('closed'),sheet,42,134);
+blit(mkBarrel('open'),sheet,66,134);
+blit(mkBarrel('wine'),sheet,90,134);
+// Food bowls
+const bowlColors=[hx('#d0a830'),hx('#c04030'),hx('#50a040'),hx('#a06030'),hx('#d08040')];
+bowlColors.forEach((c,i)=>blit(mkBowl(c),sheet,118+i*14,140));
+
+// --- Row 5: Sofa + Small items + Bench + Chests ---
+blit(mkSofa(),sheet,2,210);
+// L-shaped sofa second part
+const sofa2=new PB(28,24);texPlanks(sofa2,0,12,28,24,P.leather,4);texPlanks(sofa2,16,0,28,24,P.leather,4);
+texCloth(sofa2,(x,y)=>x>=2&&x<26&&y>=14&&y<22,2,14,26,22,P.cloth_r,0,.5,.3);
+texCloth(sofa2,(x,y)=>x>=18&&x<26&&y>=2&&y<22,18,2,26,22,P.cloth_r,Math.PI/2,.5,.3);
+pp(sofa2,{ao:.12,light:.1,outline:.26});blit(sofa2,sheet,34,210);
+
+// More small items row
+const items2=['book','potion','trophy','sack','scroll'];
+items2.forEach((t,i)=>{const it=mkSmallItem(t);blit(it,sheet,80+i*12,220)});
+
+blit(mkBench(),sheet,160,220);
+blit(mkChest(),sheet,210,216);
+blit(mkChest(),sheet,232,216);
+
+// Barrel + crate combo (bottom right)
+const combo=new PB(24,20);
+texPlanks(combo,0,4,16,20,P.ltWood,3);// crate
+for(let x=0;x<16;x++){combo.setC(x,4,nz(pk(P.dkWood,x,4),x,4,4));combo.setC(x,19,nz(pk(P.dkWood,x,19),x,19,4))}
+for(let y=4;y<20;y++){combo.setC(0,y,nz(pk(P.dkWood,0,y),0,y,4));combo.setC(15,y,nz(pk(P.dkWood,15,y),15,y,4))}
+pp(combo,{ao:.1,light:.1,outline:.24});
+blit(combo,sheet,260,214);
+
+// Sack on top of crate
+const sackItem=mkSmallItem('sack');
+blitA(sackItem,sheet,264,210,{contactShadow:true,shadowOffset:[1,1],shadowAlpha:.15});
+
+// Extra scroll/map bottom
+const map=new PB(20,12);
+for(let y=2;y<10;y++)for(let x=0;x<20;x++){if(y>=3&&y<9)map.setC(x,y,nz(hx('#d8c8a0'),x,y,5))}
+map.setC(0,3,hx('#c0a870'));map.setC(0,8,hx('#c0a870'));map.setC(19,3,hx('#c0a870'));map.setC(19,8,hx('#c0a870'));
+// Map marks
+for(let i=0;i<6;i++){const mx=3+Math.floor(H(i,111)*14),my=4+Math.floor(H(i,222)*4);
+  map.setC(mx,my,nz(hx('#8a2020'),mx,my,8))}
+pp(map,{ao:.04,light:.06,outline:.18});blit(map,sheet,80,240);
+
+// ================================================================
+//  RENDER
+// ================================================================
+const SCALE=3,cv=document.getElementById('sheet');
+cv.width=SW*SCALE;cv.height=SH*SCALE;
+const ctx=cv.getContext('2d');
+for(let y=0;y<SH;y++)for(let x=0;x<SW;x++){
+  const i=(y*SW+x)<<2;const a=sheet.data[i+3];if(a===0)continue;
+  ctx.fillStyle=`rgb(${sheet.data[i]},${sheet.data[i+1]},${sheet.data[i+2]})`;
+  ctx.fillRect(x*SCALE,y*SCALE,SCALE,SCALE)}
+})();
+</script>
+</body>
+</html>

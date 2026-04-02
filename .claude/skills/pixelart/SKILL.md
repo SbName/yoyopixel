@@ -351,6 +351,80 @@ Uses `<canvas>` with `PixelBuffer` class (RGBA). Each pixel is individually addr
 
 ---
 
+## Sprite Template System (for items ≤20px)
+
+For small items (potions, books, bowls, weapons, etc.), do NOT use procedural texture fills. Use **character-grid templates** with material zone annotations. The engine auto-shades each zone based on material type.
+
+### Template Format
+
+```javascript
+const POTION = {
+  grid: [
+    '..cc..',
+    '..kk..',
+    '.GGGG.',
+    'GLLLLG',
+    'GLLLLG',
+    'GLLLLG',
+    'GLLLLG',
+    '.GGGG.',
+  ],
+  materials: { c:'cork', k:'cork', G:{type:'glass',alpha:200}, L:'liquid' }
+};
+```
+
+LLM hand-crafts the **shape** (which pixels belong to which zone). Engine handles all **shading** automatically per material type.
+
+### Material Shader Types
+
+Each material zone gets its own shading strategy:
+
+| Shader | Effect | Use for |
+|--------|--------|---------|
+| `wood` | Directional warm light, grain hint | Handles, frames, furniture |
+| `metal` | Sharp specular band + cool ambient | Blades, armor, iron bands |
+| `gold` | Warm specular + rich ambient | Crowns, coins, fittings |
+| `glass` | Cylindrical highlight + transparency | Bottles, windows, lenses |
+| `liquid` | Horizontal gradient + surface line | Potions, water, soup |
+| `cloth` | Soft folds + directional | Fabric, sacks, pillows |
+| `leather` | Warm directional, moderate contrast | Covers, straps, seats |
+| `ceramic` | Spherical highlight | Bowls, vases, pots |
+| `gem` | Facet shimmer + top-left specular | Gems, crystals |
+| `paper` | Subtle vertical gradient | Scrolls, books interior |
+| `cork` | Warm top-light | Stoppers, small wood |
+| `fire` | Strong top-bright, very warm | Flames, embers |
+| `plant` | Cool-warm directional | Leaves, stems |
+| `flat` | No shading | UI elements, symbols |
+
+### Hue-Shift Shading
+
+Replace simple darken/lighten with hue-aware shade function:
+```javascript
+shade(color, amount, warmth)
+// amount: -1 (shadow) to +1 (highlight)
+// warmth: 0 (neutral) to 1 (warm highlights, cool shadows)
+// Highlights shift toward yellow/white, shadows shift toward blue/purple
+```
+
+### Adaptive Outline
+
+Outline color = saturated dark version of the adjacent pixel color (not uniform darkening):
+- Wood edge → deep brown (not gray)
+- Metal edge → dark blue-gray (not dark gray)
+- Plant edge → deep green (not muddy green)
+
+### Warm Palette Convention
+
+Use saturated, warm-shifted colors for wood/leather/gold:
+```
+Wood light:  #c88848 (not #8b6040)
+Wood medium: #a86830 (not #6b4530)
+Wood dark:   #4a2810 (not #3a2018)
+Gold:        #d8a838 (not #a08030)
+```
+
+---
+
 ## Tileset Mode
 
 When prompt implies **tileset / sprite sheet / asset pack**, generate a complete sheet of related game-ready assets on a single canvas.

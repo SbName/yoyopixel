@@ -140,7 +140,7 @@ Game-ready assets using region-based procedural textures — LLM declares region
 </tr>
 </table>
 
-19 procedural texture algorithms including cloth folds, metal specular, crystal facets, bone, rope, woven patterns, and coral branching
+19 procedural texture algorithms + sprite template system with per-material hue-shift shading and adaptive outlines
 
 **Full tileset demo:**
 
@@ -287,7 +287,9 @@ pixelai/
 ├── prototype-gallery.html    ★ Style gallery: tower, sakura tree, chest, well
 ├── prototype-animals.html    ★ Organic textures: fox, koi, owl, snail
 ├── tileset-village.html      ★ Full village tileset (~35 assets on one sheet)
-└── engine-v2.html            ★ Engine v2 demo: cloth, metal, crystal, bone, assembly
+├── tileset-tavern.html       ★ Tavern interior tileset (~45 assets)
+├── engine-v2.html            ★ Engine v2: cloth, metal, crystal, bone, assembly
+└── engine-v3.html            ★ Engine v3: sprite templates, hue-shift shading, adaptive outline
 ```
 
 ---
